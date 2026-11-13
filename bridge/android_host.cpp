@@ -157,7 +157,7 @@ extern "C" JNIEXPORT void JNICALL Java_org_pokemonx_recomp_MainActivity_nativeRu
  auto& system=Core::System::GetInstance();
  std::unique_ptr<Window> window;
  try{
-  Log("Starting Pokemon X native CPU + Azahar kernel/services/Vulkan build 28");
+  Log("Starting Pokemon X native CPU + Azahar kernel/services/Vulkan V0.1.1 Beta");
   if(renderer!=0)throw std::runtime_error("Azahar backend requires Vulkan; select Vulkan in settings");
   std::filesystem::create_directories(dir+"/azahar/");FileUtil::SetUserPath(dir+"/azahar/");
   for(const auto* path:{"shaders/vulkan/pipeline","shaders/vulkan/transferable"})std::filesystem::create_directories(dir+"/azahar/"+path);

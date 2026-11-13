@@ -1,6 +1,6 @@
 # Pokémon X Recomp Android
 
-**V0.1.0 Beta** — projeto experimental de recompilação estática de Pokémon X para Android ARM64, com uma interface adaptada para jogar em uma ou duas telas.
+**V0.1.1 Beta** — projeto experimental de recompilação estática de Pokémon X para Android ARM64, com uma interface adaptada para jogar em uma ou duas telas.
 
 A CPU do jogo usa código nativo gerado pelo **Hexlith**. **Azahar** fornece kernel, serviços do 3DS, memória e auxilia na tradução gráfica para Vulkan. Instruções e módulos que não possuem uma tradução nativa válida usam o fallback do Hexlith.
 
@@ -11,7 +11,7 @@ A CPU do jogo usa código nativo gerado pelo **Hexlith**. **Azahar** fornece ker
 3. Ajuste resolução, driver Vulkan e controles antes de iniciar.
 4. Salve pelo menu do próprio jogo. Feche a sessão antes de importar ou exportar saves.
 
-A versão pública `0.1.0-beta` corresponde à evolução da build de teste 33. O `versionCode` é **34**, para permitir atualização sobre os APKs de teste sem precisar desinstalar o aplicativo.
+A versão pública `0.1.1-beta` corrige o retorno da tela após fechar a bolsa ou a seleção de Pokémon com módulos auxiliares ainda carregados. O `versionCode` é **35**, para permitir atualização sobre os APKs de teste sem precisar desinstalar o aplicativo.
 
 ## Funcionalidades
 
@@ -54,6 +54,7 @@ O projeto evoluiu por builds de teste iterativas, com relatos de gameplay e ajus
 - [Arquitetura e proveniência](docs/ARCHITECTURE.md)
 - [Compilação e insumos externos](docs/BUILD.md)
 - [Histórico técnico](docs/ANDROID_DEVELOPMENT_HISTORY.md)
+- [Notas da V0.1.1 Beta](docs/RELEASE_v0.1.1-beta.md)
 - [Notas da V0.1.0 Beta](docs/RELEASE_v0.1.0-beta.md)
 - [Créditos e licenças](THIRD_PARTY_NOTICES.md)
 

@@ -17,6 +17,7 @@ jobs:
       - name: Interface state and presentation checks
         run: |
           python bridge/tests/presentation_prepare_test.py
+          python bridge/tests/battle_menu_lifecycle_test.py
           for test in screen_interface scene_detector command_controller move_cards battle_menu_exit; do
             g++ -std=c++20 -O2 -Iazahar/src bridge/tests/${test}_test.cpp -o /tmp/px-${test}
             /tmp/px-${test}

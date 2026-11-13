@@ -45,14 +45,14 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
  private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
  private SessionLogs sessionLogs;private File launcherLog;private volatile File sessionLog;
  private File log(){return sessionLog!=null?sessionLog:launcherLog;}
- private int versionCode(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionCode;}catch(Exception ignored){return 34;}}
+ private int versionCode(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionCode;}catch(Exception ignored){return 35;}}
  private String logHeader(){return "APK versionCode="+versionCode()+"; Android "+Build.VERSION.RELEASE+" API "+Build.VERSION.SDK_INT+"; "+Build.MANUFACTURER+" "+Build.MODEL+"; PID="+android.os.Process.myPid();}
  private boolean hasGame(){return new File(getFilesDir(),"game.cxi").isFile();}
  private void append(String m){File target=running.get()&&sessionLog!=null?sessionLog:launcherLog;if(target!=null)try{SessionLogs.append(target,m);}catch(IOException error){android.util.Log.e("PokemonX","Cannot write session log",error);}}
  private void toast(String m){Toast.makeText(this,m,Toast.LENGTH_LONG).show();}
  @Override public void onCreate(Bundle state){super.onCreate(state);settings=getSharedPreferences("settings",0);I18n.setLanguage(settings.getString("app_language","pt-BR"));getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);getWindow().getDecorView().setSystemUiVisibility(5894);
   try{sessionLogs=new SessionLogs(getFilesDir());launcherLog=sessionLogs.begin(false,versionCode(),System.currentTimeMillis(),logHeader());sessionLog=sessionLogs.restore(settings.getString("last_session_log",null));}catch(IOException error){message=I18n.t("Falha ao criar logs: ")+I18n.runtime(error.getMessage()==null?error.getClass().getSimpleName():error.getMessage());}
-  append("Build V0.1.0 Beta launcher opened");
+  append("Build V0.1.1 Beta launcher opened");
   Thread.UncaughtExceptionHandler previous=Thread.getDefaultUncaughtExceptionHandler();Thread.setDefaultUncaughtExceptionHandler((t,e)->{append(android.util.Log.getStackTraceString(e));if(previous!=null)previous.uncaughtException(t,e);});showLauncher();
  }
  private LinearLayout column(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;}
@@ -60,7 +60,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
  private Button button(String label,Runnable action){Button b=new Button(this);b.setText(label);b.setTextSize(13);b.setAllCaps(false);b.setTextColor(Color.WHITE);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff243b56));b.setOnClickListener(v->action.run());return b;}
  private void addButton(LinearLayout parent,String label,Runnable action){Button b=button(label,action);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(47));p.setMargins(0,dp(3),0,dp(3));parent.addView(b,p);if(importing||running.get())b.setEnabled(label.equals(I18n.t("Exportar logs")));}
  private void showLauncher(){stopHud();page="launcher";pendingStart=false;screen=null;surfaceReady=false;nativePause(true);nativeSurface(null);releaseInput();
-  LauncherView home=new LauncherView(this,hasGame(),importing||running.get(),importing?message:running.get()?I18n.t("Encerrando e salvando…"):"", "V0.1.0 Beta",
+  LauncherView home=new LauncherView(this,hasGame(),importing||running.get(),importing?message:running.get()?I18n.t("Encerrando e salvando…"):"", "V0.1.1 Beta",
    ()->{if(importing||running.get())return;if(!hasGame()){message=I18n.t("Importe seu arquivo CIA para começar.");showSettings();return;}showGame(true);},
    this::showSettings,()->{if(importing){toast(I18n.t("Aguarde o fim da importação."));return;}nativeStop();finish();});
   status=home.statusView();setContentView(home);
@@ -102,7 +102,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
    ui.note(I18n.t("O idioma do jogo é independente desta opção."));
    ui.toggle(I18n.t("Indicadores de desempenho"),I18n.t("FPS, velocidade, RAM do app e temperatura da bateria."),settings.getBoolean("performance_hud",true),on->settings.edit().putBoolean("performance_hud",on).apply());
    ui.action(I18n.t("Exportar logs"),I18n.t("Compartilhe o registro da última sessão"),true,this::exportLog);
-   ui.note(I18n.t("Pokémon X Recomp · V0.1.0 Beta\nNintendo 3DS · Vulkan · Áudio estéreo"));
+   ui.note(I18n.t("Pokémon X Recomp · V0.1.1 Beta\nNintendo 3DS · Vulkan · Áudio estéreo"));
   }setContentView(ui);
  }
 

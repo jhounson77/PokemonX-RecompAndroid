@@ -114,7 +114,7 @@ def main():
                 archive.write(path, str(path.relative_to(BUILD / 'stage')))
     aligned = BUILD / 'aligned.apk'
     run(tools / 'zipalign', '-P', '16', '-f', '4', unsigned, aligned)
-    result = BUILD / 'PokemonX_Recomp_v0.1.0_Beta.apk'
+    result = BUILD / 'PokemonX_Recomp_v0.1.1_Beta.apk'
     run(tools / 'apksigner', 'sign', '--ks', env('PX_KEYSTORE'), '--ks-pass',
         'file:' + str(env('PX_KEYSTORE_PASSWORD_FILE')), '--v1-signing-enabled', 'false',
         '--v2-signing-enabled', 'true', '--v3-signing-enabled', 'true',

@@ -42,5 +42,34 @@ void Program::Loaded(const ModuleImage& image, std::uint32_t base) {
     const auto result = loaded_.Loaded(image.name,base,image.offset,image.size,image.digest);
     LOG_INFO(Core_ARM11, "CRO {} at {:08X}: native binding outcome {}",image.name,base,result==hexlith::domain::lift::runtime::LoadedModules::Outcome::Lifted?"native AOT":result==hexlith::domain::lift::runtime::LoadedModules::Outcome::DigestDiffers?"interpreter (digest differs)":"interpreter (no table)");
 }
-void Program::Unloaded(const std::string& name, std::uint32_t base) { if(name=="DllBattle"){++PokemonXUI::generation;if(PokemonXUI::battle_menu_full)PokemonXUI::ClosePopup();submenu_bases_.clear();PokemonXUI::battle_loaded=false;PokemonXUI::scene=0;}bool was_menu=submenu_bases_.erase(base)!=0;if(was_menu){PokemonXUI::scene=0;if(submenu_bases_.empty()&&PokemonXUI::battle_menu_full){++PokemonXUI::generation;PokemonXUI::battle_menu_exit=true;LOG_INFO(Core_ARM11,"Last battle auxiliary module unloaded; scheduling primary screen return");}}PokemonXUI::submenu_loaded=!submenu_bases_.empty();PokemonXUI::force_probe=true;loaded_.Unloaded(name,base); }
+void Program::Unloaded(const std::string& name, std::uint32_t base) {
+    if (name == "DllBattle") {
+        ++PokemonXUI::generation;
+        if (PokemonXUI::battle_menu_full) PokemonXUI::ClosePopup();
+        submenu_bases_.clear();
+        PokemonXUI::battle_loaded = false;
+        PokemonXUI::scene = 0;
+    }
+    const bool tracked_menu = submenu_bases_.erase(base) != 0;
+    // The game can reuse a menu loaded before battle, before tracking began.
+    const bool reused_menu = PokemonXUI::battle_loaded &&
+        (name == "DllBag" || name == "DllPokeList" || name == "DllBattlePartySelect" ||
+         name == "DllPoke3Select" || name == "DllPokeViewer");
+    const bool was_menu = tracked_menu || reused_menu;
+    if (was_menu) {
+        PokemonXUI::scene = 0;
+        // Residency is not visibility. Bag/party modules can close while their
+        // helpers remain loaded. A summary viewer closing alone stays in party.
+        if (name != "DllPokeViewer" && PokemonXUI::battle_menu_full) {
+            ++PokemonXUI::generation;
+            PokemonXUI::battle_menu_exit = true;
+            LOG_INFO(Core_ARM11,
+                     "Battle menu {} unloaded; scheduling primary screen return despite resident helpers",
+                     name);
+        }
+    }
+    PokemonXUI::submenu_loaded = !submenu_bases_.empty();
+    PokemonXUI::force_probe = true;
+    loaded_.Unloaded(name, base);
+}
 }

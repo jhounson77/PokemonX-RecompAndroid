@@ -90,11 +90,12 @@ inline int Classify(const std::uint8_t* pixels,int width,int height){
 // A guest submenu unload is independent of the bottom-screen image: item
 // execution need not redraw the original command menu before the animation.
 // Two independent probes allow nested submenu loads to cancel the pending exit.
+// Residency is not visibility: helpers can stay loaded after the menu closes.
 struct BattleMenuExit {
  unsigned session=0;int confirmations=0;
- bool Observe(unsigned token,bool full,bool exited,bool active){
+ bool Observe(unsigned token,bool full,bool exited,bool /* resident */){
   if(token!=session){session=token;confirmations=0;}
-  if(!full||!exited||active){confirmations=0;return false;}
+  if(!full||!exited){confirmations=0;return false;}
   return ++confirmations>=2;
  }
 };

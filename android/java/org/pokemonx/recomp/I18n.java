@@ -234,7 +234,7 @@ final class I18n {
   translations.put("O driver precisa ser ELF ARM64.",new String[]{"Driver must be an ARM64 ELF file.","El controlador debe ser un archivo ELF ARM64.","Le pilote doit être un fichier ELF ARM64."});
   translations.put("Biblioteca do driver não encontrada.",new String[]{"Driver library not found.","Biblioteca del controlador no encontrada.","Bibliothèque du pilote introuvable."});
   translations.put("libraryName inválido.",new String[]{"Invalid libraryName.","libraryName inválido.","libraryName invalide."});
-  translations.put("Pokémon X Recomp · V0.1.0 Beta\nNintendo 3DS · Vulkan · Áudio estéreo",new String[]{"Pokémon X Recomp · V0.1.0 Beta\nNintendo 3DS · Vulkan · Stereo audio","Pokémon X Recomp · V0.1.0 Beta\nNintendo 3DS · Vulkan · Audio estéreo","Pokémon X Recomp · V0.1.0 Beta\nNintendo 3DS · Vulkan · Audio stéréo"});
+  translations.put("Pokémon X Recomp · V0.1.1 Beta\nNintendo 3DS · Vulkan · Áudio estéreo",new String[]{"Pokémon X Recomp · V0.1.1 Beta\nNintendo 3DS · Vulkan · Stereo audio","Pokémon X Recomp · V0.1.1 Beta\nNintendo 3DS · Vulkan · Audio estéreo","Pokémon X Recomp · V0.1.1 Beta\nNintendo 3DS · Vulkan · Audio stéréo"});
  }
  static void setLanguage(String tag){int next=0;for(int i=0;i<TAGS.length;i++)if(TAGS[i].equals(tag))next=i;language=next;}
  static int languageIndex(){return language;}
