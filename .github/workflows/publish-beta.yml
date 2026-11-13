@@ -26,7 +26,7 @@ jobs:
           unzip -q PokemonX_Recomp_v0.1.0_Beta_Source.zip -d /tmp/px-source
       - name: Import sources
         run: |
-          rsync -a --exclude='.git/' --exclude='.github/' /tmp/px-source/ ./
+          rsync -a --exclude='.git/' --exclude='.github/' --exclude='teaklite2_tests_result.bin' /tmp/px-source/ ./
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -45,6 +45,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          printf '%s\n' '# Upstream test fixture' '' 'The source ZIP retains an unresolved upstream Git LFS pointer for azahar/externals/teakra/src/test_verifier/data/teaklite2_tests_result.bin. The Git tree omits this unavailable test fixture. It is not required for the Android runtime or public interface checks. Obtain it from upstream Teakra to run its DSP verifier tests.' '' 'LFS SHA-256: baffcd4f805a7480d969401792443a34aa39f813b4f0ae49c6365f1d1f3ce120' > docs/UPSTREAM_TEST_FIXTURE.md
           git -c filter.lfs.clean=cat -c filter.lfs.required=false add .
           if ! git diff --cached --quiet; then
             git -c core.quotePath=false commit --quiet -m 'Publish Android integration and vendored sources for V0.1.0 Beta'
