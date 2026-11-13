@@ -2,7 +2,7 @@
 
 **V0.1.0 Beta** — projeto experimental de recompilação estática de Pokémon X para Android ARM64, com uma interface adaptada para jogar em uma ou duas telas.
 
-A CPU do jogo usa código nativo gerado pelo **Hexlith**. **Azahar** fornece kernel, serviços do 3DS, memória, tradução gráfica para Vulkan e emulação de DSP. Instruções e módulos que não possuem uma tradução nativa válida usam o fallback do Hexlith. Portanto, este projeto combina recompilação com componentes de emulação; não é uma reescrita completa do jogo nem uma substituição de todos os componentes do 3DS por código Android.
+A CPU do jogo usa código nativo gerado pelo **Hexlith**. **Azahar** fornece kernel, serviços do 3DS, memória e auxilia na tradução gráfica para Vulkan. Instruções e módulos que não possuem uma tradução nativa válida usam o fallback do Hexlith.
 
 ## Instalação e uso
 
@@ -49,9 +49,7 @@ A primeira execução de efeitos ainda não vistos pode compilar novos shaders. 
 
 ## Desenvolvimento
 
-O projeto evoluiu por builds de teste iterativas, com relatos de gameplay e ajustes de controles, apresentação, memória, áudio, shaders e interface. A manutenção Android é de **@jhounson77**, com desenvolvimento assistido por **ChatGPT/Codex**. As bases técnicas e dependências conservam seus créditos e licenças originais.
-
-A licença da integração não implica direitos sobre Pokémon, Nintendo ou Game Freak, seus nomes, personagens ou artes. Este é um projeto não oficial, sem afiliação ou endosso dessas empresas.
+O projeto evoluiu por builds de teste iterativas, com relatos de gameplay e ajustes de controles, apresentação, memória, áudio, shaders e interface. As bases técnicas e dependências conservam seus créditos e licenças originais.
 
 - [Arquitetura e proveniência](docs/ARCHITECTURE.md)
 - [Compilação e insumos externos](docs/BUILD.md)
