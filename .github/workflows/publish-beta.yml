@@ -45,10 +45,10 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add .
+          git -c filter.lfs.clean=cat -c filter.lfs.required=false add .
           if ! git diff --cached --quiet; then
-            git commit -m 'Publish Android integration and vendored sources for V0.1.0 Beta'
-            git push origin HEAD:main
+            git -c core.quotePath=false commit --quiet -m 'Publish Android integration and vendored sources for V0.1.0 Beta'
+            GIT_LFS_SKIP_PUSH=1 git push origin HEAD:main
           fi
           git tag -f v0.1.0-beta
-          git push origin refs/tags/v0.1.0-beta --force
+          GIT_LFS_SKIP_PUSH=1 git push origin refs/tags/v0.1.0-beta --force
