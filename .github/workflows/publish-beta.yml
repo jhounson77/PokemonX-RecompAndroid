@@ -1,10 +1,54 @@
 name: Publish V0.1.0 Beta
 on:
+  release:
+    types: [published]
   workflow_dispatch:
 permissions:
   contents: write
 jobs:
-  prepare:
+  import-source:
+    if: github.event_name == 'workflow_dispatch' || github.event.release.tag_name == 'v0.1.0-beta'
     runs-on: ubuntu-24.04
     steps:
-      - run: echo 'Release inputs are being prepared and verified.'
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Download and verify public release files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mkdir -p /tmp/px-release /tmp/px-source
+          gh release download v0.1.0-beta --dir /tmp/px-release --pattern 'PokemonX_Recomp_v0.1.0_Beta*'
+          cd /tmp/px-release
+          echo '13659a438f8e4c064ffa6aba2e1b95fc8be3ced90d8c9533cb0ddc47dc71cf90  PokemonX_Recomp_v0.1.0_Beta_Source.zip' | sha256sum -c -
+          echo '7f0b93ae805101e7d1ddd50e05c338f26e78ec8246be8bddc37c499efbaa9465  PokemonX_Recomp_v0.1.0_Beta.apk' | sha256sum -c -
+          unzip -q PokemonX_Recomp_v0.1.0_Beta_Source.zip -d /tmp/px-source
+      - name: Import sources
+        run: |
+          rsync -a --exclude='.git/' --exclude='.github/' /tmp/px-source/ ./
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Validate public interface and locale tests
+        run: |
+          python3 bridge/tests/presentation_prepare_test.py
+          for test in screen_interface scene_detector command_controller move_cards battle_menu_exit; do
+            g++ -std=c++20 -O2 -Iazahar/src bridge/tests/${test}_test.cpp -o /tmp/px-${test}
+            /tmp/px-${test}
+          done
+          mkdir -p /tmp/px-java
+          javac -d /tmp/px-java android/java/org/pokemonx/recomp/I18n.java android/tests/I18nTest.java
+          java -cp /tmp/px-java org.pokemonx.recomp.I18nTest
+      - name: Commit public sources and attach version tag
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .
+          if ! git diff --cached --quiet; then
+            git commit -m 'Publish Android integration and vendored sources for V0.1.0 Beta'
+            git push origin HEAD:main
+          fi
+          git tag -f v0.1.0-beta
+          git push origin refs/tags/v0.1.0-beta --force
