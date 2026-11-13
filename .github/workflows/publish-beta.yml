@@ -1,0 +1,10 @@
+name: Publish V0.1.0 Beta
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo 'Release inputs are being prepared and verified.'
