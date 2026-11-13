@@ -1,0 +1,143 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -648,3 +648,6 @@
+     install(FILES "${PROJECT_SOURCE_DIR}/dist/org.azahar_emu.Azahar.xml"
+             DESTINATION "${CMAKE_INSTALL_PREFIX}/share/mime/packages")
+ endif()
++
++# Local Pokemon X native CPU adapter; contains no game data.
++add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../bridge" px-native-bridge)
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -222,7 +222,7 @@
+     add_subdirectory(citra_room_standalone)
+ endif()
+ 
+-if (ANDROID AND NOT ENABLE_LIBRETRO)
++if (ANDROID AND NOT ENABLE_LIBRETRO AND NOT PX_CUSTOM_FRONTEND)
+     add_subdirectory(android/app/src/main/jni)
+     target_include_directories(citra-android PRIVATE android/app/src/main)
+ endif()
+--- a/src/core/core.cpp
++++ b/src/core/core.cpp
+@@ -1,3 +1,5 @@
++#include "arm_native.h"
++#include "program.h"
+ // Copyright 2014-2026 Citra Emulator Project / Azahar Emulator Project
+ // Licensed under GPLv3 or any later version
+ // Refer to the LICENSE.txt file included.
+@@ -597,7 +599,12 @@
+ 
+     exclusive_monitor = MakeExclusiveMonitor(*memory, num_cores);
+     cpu_cores.reserve(num_cores);
+-    if (Settings::values.use_cpu_jit) {
++    if (auto native = PokemonX::GetProgram()) {
++        for (u32 i = 0; i < num_cores; ++i) {
++            cpu_cores.push_back(std::make_shared<PokemonX::ARMNative>(
++                *this, *memory, i, timing->GetTimer(i), native->Entries(), &native->Modules()));
++        }
++    } else if (Settings::values.use_cpu_jit) {
+ #if CITRA_ARCH(x86_64) || CITRA_ARCH(arm64)
+         for (u32 i = 0; i < num_cores; ++i) {
+             cpu_cores.push_back(std::make_shared<ARM_Dynarmic>(
+--- a/src/core/hle/service/ldr_ro/ldr_ro.cpp
++++ b/src/core/hle/service/ldr_ro/ldr_ro.cpp
+@@ -1,3 +1,4 @@
++#include "program.h"
+ // Copyright 2014 Citra Emulator Project
+ // Licensed under GPLv2 or any later version
+ // Refer to the misc/licenses/gplv2.txt file included.
+@@ -262,6 +263,14 @@
+     }
+ 
+     CROHelper cro(cro_address, *process, system);
++    // Inspect unrelocated code, but bind only after the complete load succeeds.
++    PokemonX::ModuleImage native_image;
++    const auto native = PokemonX::GetProgram();
++    if (native && cro_size <= (64u << 20)) {
++        std::vector<u8> original(cro_size);
++        system.Memory().ReadBlock(*process, cro_buffer_ptr, original.data(), original.size());
++        native_image = native->Inspect(original);
++    }
+ 
+     result = cro.VerifyHash(cro_size, crr_address);
+     if (result.IsError()) {
+@@ -330,6 +339,8 @@
+     LOG_INFO(Service_LDR, "CRO \"{}\" loaded at 0x{:08X}, fixed_end=0x{:08X}", cro.ModuleName(),
+              cro_address, cro_address + fix_size);
+ 
++    if (native) native->Loaded(native_image, cro_address);
++
+     rb.Push(ResultSuccess, fix_size);
+ }
+ 
+@@ -390,12 +401,17 @@
+         }
+     }
+ 
++    const std::string native_module_name = cro.ModuleName();
+     cro.Unrebase(false);
+ 
+     result = process->Unmap(cro_address, cro_buffer_ptr, fixed_size,
+                             Kernel::VMAPermission::ReadWrite, true);
+     if (result.IsError()) {
+         LOG_ERROR(Service_LDR, "Error unmapping CRO {:08X}", result.raw);
++    }
++
++    if (result.IsSuccess()) {
++        if (const auto native = PokemonX::GetProgram()) native->Unloaded(native_module_name, cro_address);
+     }
+ 
+     system.InvalidateCacheRange(cro_address, fixed_size);
+--- a/src/common/android_utils.cpp
++++ b/src/common/android_utils.cpp
+@@ -318,26 +318,12 @@
+     return result;
+ }
+ 
++// This frontend imports game data into its private app directory. It does not
++// use Azahar's Java document-tree storage facade.
+ std::string TranslateFilePath(const std::string& filepath) {
+-    // "!" at front of path indicates an already-native path.
+-    // This is hacky, but I don't know how else we can do this without a lot of quite invasive
+-    // changes to how Android file IO works.
+-    // TODO: We should definitely change this in favour of a real solution down the line.
+-    if (filepath.front() == '!') {
+-        return filepath.substr(1);
+-    }
+-    std::optional<std::string> userDirLocation = GetUserDirectory();
+-    if (userDirLocation) {
+-        std::string translatedPath = *userDirLocation + "/" + filepath;
+-        boost::replace_all(translatedPath, "//", "/");
+-        return translatedPath;
+-    }
+-    return "";
+-}
+-
+-bool CanUseRawFS() {
+-    return AndroidUtils::GetBuildFlavor() != AndroidBuildFlavors::GOOGLEPLAY;
+-}
++    return !filepath.empty() && filepath.front() == '!' ? filepath.substr(1) : filepath;
++}
++bool CanUseRawFS() { return true; }
+ 
+ #define FR(FunctionName, ReturnValue, JMethodID, Caller, JMethodName, Signature)                   \
+     F(FunctionName, ReturnValue, JMethodID, Caller)
+--- a/src/core/loader/ncch.cpp
++++ b/src/core/loader/ncch.cpp
+@@ -1,3 +1,4 @@
++#include "program.h"
+ // Copyright 2014-2026 Citra Emulator Project / Azahar Emulator Project
+ // Licensed under GPLv2 or any later version
+ // Refer to the misc/licenses/gplv2.txt file included.
+@@ -129,6 +130,10 @@
+     u64_le program_id;
+     if (ResultStatus::Success == ReadCode(code) &&
+         ResultStatus::Success == ReadProgramId(program_id)) {
++        if (const auto native = PokemonX::GetProgram(); native && !native->VerifyCode(code)) {
++            LOG_ERROR(Loader, "Executable digest differs from native library; refusing stale AOT");
++            return ResultStatus::Error;
++        }
+         if (IsGbaVirtualConsole(code)) {
+             LOG_ERROR(Loader, "Encountered unsupported GBA Virtual Console code section.");
+             return ResultStatus::ErrorGbaTitle;

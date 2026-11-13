@@ -1,0 +1,36 @@
+target_sources(
+    hexlith_domain
+    PRIVATE command_processor.h
+            float24.h
+            fragment_stage.cpp
+            fragment_stage.h
+            gpu_memory.cpp
+            gpu_memory.h
+            gx_command.cpp
+            gx_command.h
+            memory_transfer.cpp
+            memory_transfer.h
+            pica_registers.h
+            pica_state.cpp
+            pica_state.h
+            rasterizer.cpp
+            rasterizer.h
+            recording_index.cpp
+            recording_index.h
+            reference_renderer.cpp
+            reference_renderer.h
+            screen.cpp
+            screen.h
+            shader_arithmetic.h
+            shader_encoding.h
+            shader_glsl.cpp
+            shader_glsl.h
+            shader_interpreter.cpp
+            shader_interpreter.h
+            texture_cache.cpp
+            texture_cache.h
+            vertex_stage.cpp
+            vertex_stage.h
+            pixel_formats.cpp
+            pixel_formats.h
+)

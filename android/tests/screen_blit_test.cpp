@@ -1,0 +1,10 @@
+#include "screen_blit.h"
+#include <cassert>
+#include <chrono>
+#include <iostream>
+struct Pixel {unsigned char red,green,blue,alpha;};
+struct Picture {unsigned width,height;std::vector<Pixel> pixels;};
+void Reference(std::uint32_t* dst,int w,int h,int stride,const Picture&p,pxandroid::Rect r){std::fill(dst,dst+stride*h,0xff080808u);if(!p.width||!p.height||p.pixels.size()<p.width*p.height||r.w<=0||r.h<=0)return;for(int y=std::max(0,r.y);y<std::min(h,r.y+r.h);++y){auto sy=static_cast<unsigned>(y-r.y)*p.height/r.h;for(int x=std::max(0,r.x);x<std::min(w,r.x+r.w);++x){auto c=p.pixels[sy*p.width+static_cast<unsigned>(x-r.x)*p.width/r.w];dst[y*stride+x]=c.red|(c.green<<8)|(c.blue<<16)|0xff000000u;}}}
+int main(){pxandroid::ScreenBlitter blitter;for(auto size:std::vector<std::pair<int,int>>{{400,240},{800,480},{1200,720},{320,240},{1,1}}){Picture p{static_cast<unsigned>(size.first),static_cast<unsigned>(size.second),{}};for(unsigned i=0;i<p.width*p.height;++i)p.pixels.push_back({static_cast<unsigned char>(i*13),static_cast<unsigned char>(i*31),static_cast<unsigned char>(i/31),127});for(auto target:std::vector<std::pair<int,int>>{{2340,1080},{1817,997},{37,41}}){int w=target.first,h=target.second,stride=w+13;for(auto r:std::vector<pxandroid::Rect>{pxandroid::Fit(w,h,p.width,p.height),{-5,-8,w+13,h+16},{0,0,w,h},{w,0,20,20},{0,0,0,0}}){std::vector<std::uint32_t>a(stride*h),b(stride*h);Reference(a.data(),w,h,stride,p,r);blitter.Draw(b.data(),w,h,stride,p,r);assert(a==b);}}}
+Picture p{800,480,std::vector<Pixel>(800*480,{23,50,101,255})};std::vector<std::uint32_t> out(2340*1080);auto r=pxandroid::Fit(2340,1080,400,240);auto bench=[&](bool fast){auto t=std::chrono::steady_clock::now();for(int i=0;i<40;++i){if(fast)blitter.Draw(out.data(),2340,1080,2340,p,r);else Reference(out.data(),2340,1080,2340,p,r);}return std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-t).count();};auto old=bench(false),now=bench(true);std::cout<<"Pixel-exact nearest-neighbour, clipping, stride and size changes: OK\nHost synthetic 40-frame copy: reference "<<old<<" ms, optimized "<<now<<" ms (not phone/game FPS)\n";
+}

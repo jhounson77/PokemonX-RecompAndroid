@@ -1,0 +1,23 @@
+target_sources(
+    hexlith_domain
+    PRIVATE address_space.cpp
+            address_space.h
+            executable_loader.cpp
+            executable_loader.h
+            handle_table.cpp
+            handle_table.h
+            ipc.cpp
+            ipc.h
+            kernel.cpp
+            kernel.h
+            objects.cpp
+            objects.h
+            region_allocator.cpp
+            region_allocator.h
+            result_code.h
+            scheduler.cpp
+            scheduler.h
+            system_calls.cpp
+            system_pages.cpp
+            system_pages.h
+)

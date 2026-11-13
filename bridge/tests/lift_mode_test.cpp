@@ -1,0 +1,6 @@
+#include "application/lift_emit.h"
+#include "domain/analysis/tables.h"
+#include <map>
+#include <iostream>
+struct Sink:hexlith::ports::BlobSink{std::map<std::string,std::string>files;hexlith::core::Status Write(std::string_view p,hexlith::core::ByteSpan b)override{files[std::string(p)]={reinterpret_cast<const char*>(b.data()),b.size()};return{};}hexlith::core::Status WriteText(std::string_view p,std::string_view t)override{files[std::string(p)]=t;return{};}hexlith::core::Status MakeDirectory(std::string_view)override{return{};}std::string Describe()const override{return"synthetic";}};
+int main(){using namespace hexlith;namespace a=domain::analysis;namespace arm=domain::arm;std::vector<std::uint8_t> code={0,0,0,0xfa,0x1e,0xff,0x2f,0xe1,0x1e,0xff,0x2f,0xe1};auto funcs=a::RenderFunctions({{0x1000,8,arm::InstructionSet::Arm},{0x1008,4,arm::InstructionSet::Arm}});auto regions=a::RenderRegions({{0x1000,12,a::RegionKind::Code,arm::InstructionSet::Arm}});Sink sink;auto result=application::EmitLiftedCode({code,0x1000,funcs,regions},sink);if(!result){std::cerr<<result.Failure().Message();return 2;}for(auto&[p,s]:sink.files)if(s.find("fn_00001008_t")!=s.npos){std::cerr<<"FAIL undeclared Thumb call to an ARM-only entry\n";return 1;}std::cout<<"PASS mode-specific direct call eligibility; other mode uses dispatcher\n";}

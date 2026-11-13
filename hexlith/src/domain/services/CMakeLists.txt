@@ -1,0 +1,36 @@
+target_sources(
+    hexlith_domain
+    PRIVATE apt.cpp
+            apt.h
+            command_table.h
+            configuration.cpp
+            configuration.h
+            digital_signal_processor.cpp
+            digital_signal_processor.h
+            file_system.cpp
+            file_system.h
+            friends.cpp
+            friends.h
+            graphics.cpp
+            graphics.h
+            human_interface.cpp
+            human_interface.h
+            network_daemons.cpp
+            network_daemons.h
+            power_manager.cpp
+            power_manager.h
+            relocatable_objects.cpp
+            relocatable_objects.h
+            registry.cpp
+            registry.h
+            save_data.cpp
+            save_data.h
+            service_manager.cpp
+            service_manager.h
+            spot_pass.cpp
+            spot_pass.h
+            stand_in_font.cpp
+            stand_in_font.h
+            yuv_to_rgb.cpp
+            yuv_to_rgb.h
+)

@@ -1,0 +1,132 @@
+#ifndef HEXLITH_PORTS_GPU_BACKEND_H
+#define HEXLITH_PORTS_GPU_BACKEND_H
+
+#include "core/result.h"
+#include "domain/gpu/screen.h"
+#include <optional>
+#include "domain/gpu/memory_transfer.h"
+
+#include <chrono>
+#include <cstdint>
+#include <span>
+#include <string>
+
+namespace hexlith::ports {
+
+// Where a backend spent its time in RunCommandList. Whatever is left of
+// `total` once these are taken out is the command processor and the vertices
+// the CPU shades. A backend that does not split its time reports only `total`.
+struct GpuBackendTimes {
+    std::chrono::nanoseconds total{0};
+    // Decoding textures from GPU memory for the shader to sample.
+    std::chrono::nanoseconds textures{0};
+    std::chrono::nanoseconds texture_sync{0},texture_decode{0},texture_pack{0};
+    // CPU vertex shading and primitive assembly.
+    std::chrono::nanoseconds vertices{0};
+    // Colour and depth buffers from memory into the backend's images, and back.
+    std::chrono::nanoseconds upload{0};
+    std::chrono::nanoseconds download{0};
+    // Waiting for the device to finish a submission.
+    std::chrono::nanoseconds wait{0};
+    // Making the buffers a submission reads.
+    std::chrono::nanoseconds allocate{0};
+    // Making the pipelines draws are made with.
+    std::chrono::nanoseconds pipelines{0};
+};
+
+struct GpuBackendStatistics {
+    std::uint64_t lists = 0;
+    std::uint64_t draws = 0;
+    std::uint64_t gpu_shaded_draws = 0;
+    std::uint64_t resident_texture_copies = 0,resident_texture_samples = 0;
+    // Runs of draws to one target, each a round trip through GPU memory in a
+    // backend that keeps nothing between them (ADR 0022).
+    std::uint64_t groups = 0;
+    // Bytes of GPU memory the colour and depth buffers were read from and
+    // written back to.
+    std::uint64_t uploaded_bytes = 0;
+    std::uint64_t downloaded_bytes = 0;
+    // Device buffers made.
+    std::uint64_t allocations = 0;
+    // A part of a target that was dirty and whose memory was written to by
+    // someone who did not say so, which the backend then took as the truth.
+    std::uint64_t conflicts = 0;
+    // Times the host stopped to wait for the device.
+    std::uint64_t waits = 0;
+    // Display transfers the backend carried out itself.
+    std::uint64_t transfers = 0;
+    // Pipelines made, and the different configurations of the fragment stage
+    // the draws had: how many shaders specialised for a draw would have been
+    // made (docs/gpu-speed.md).
+    std::uint64_t pipelines = 0;
+    std::uint64_t fragment_configurations = 0;
+    // Draws that took the generic fragment shader's pipeline because the one
+    // made for their configuration was not ready.
+    std::uint64_t fallback_draws = 0;
+    GpuBackendTimes times;
+    // A draw asked for something the backend does not implement.
+    bool unsupported = false;
+};
+
+// What draws a game's command lists. A backend is made with the GPU memory
+// the replay keeps, reads from it what a list needs, and leaves what the list
+// drew there by the time RunCommandList returns, so that memory fills,
+// display transfers and the next list see it. ADR 0022.
+//
+// A list is the unit of work: there is one call for each, never one for each
+// draw or vertex.
+class GpuBackend {
+public:
+    GpuBackend() = default;
+    virtual ~GpuBackend() = default;
+
+    GpuBackend(const GpuBackend&) = delete;
+    GpuBackend& operator=(const GpuBackend&) = delete;
+    GpuBackend(GpuBackend&&) = delete;
+    GpuBackend& operator=(GpuBackend&&) = delete;
+
+    [[nodiscard]] virtual core::Status RunCommandList(std::span<const std::uint8_t> list) = 0;
+
+    // A coherent high-resolution copy of a displayed framebuffer, if one
+    // exists. It never replaces guest memory or changes the game's addresses.
+    virtual std::optional<domain::gpu::Picture>
+    HighResolutionScreen(const domain::gpu::MemoryRange&) { return std::nullopt; }
+
+    // A read-only coherent framebuffer view, valid until the next mutating
+    // backend call. A synchronous sink may consume it without copying pixels.
+    virtual const domain::gpu::Picture*
+    BorrowHighResolutionScreen(const domain::gpu::MemoryRange&) { return nullptr; }
+
+    // Something other than the backend is about to read, or to write, a range
+    // of the memory it draws in. A backend that keeps what it drew somewhere
+    // other than that memory makes the range true before the read, and forgets
+    // its copy of it before the write; the default keeps nothing, so there is
+    // nothing to do. ADR 0030.
+    [[nodiscard]] virtual core::Status BeforeRead(std::uint32_t /*physical*/,
+                                                  std::uint32_t /*size*/) {
+        return {};
+    }
+
+    [[nodiscard]] virtual core::Status BeforeWrite(std::uint32_t /*physical*/,
+                                                   std::uint32_t /*size*/) {
+        return {};
+    }
+
+    // A display transfer the game asked for, offered to the backend before
+    // anything is announced or done to memory. A backend that carries it out
+    // answers true and owes memory the transfer's output by the time anything
+    // reads it, through BeforeRead; one that answers false leaves it to the
+    // caller, which does it on memory as before. ADR 0033.
+    [[nodiscard]] virtual core::Result<bool>
+    RunDisplayTransfer(const domain::gpu::TransferConfig& /*transfer*/) {
+        return false;
+    }
+
+    [[nodiscard]] virtual GpuBackendStatistics Statistics() const = 0;
+
+    [[nodiscard]] virtual std::string Describe() const = 0;
+};
+
+}  // namespace hexlith::ports
+
+#endif  // HEXLITH_PORTS_GPU_BACKEND_H

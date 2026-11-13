@@ -1,0 +1,127 @@
+#ifndef HEXLITH_APPLICATION_BOOT_H
+#define HEXLITH_APPLICATION_BOOT_H
+
+#include "core/byte_reader.h"
+#include "core/result.h"
+#include "domain/ctr/exheader.h"
+#include "domain/kernel/kernel.h"
+#include "domain/services/graphics.h"
+#include "domain/services/human_interface.h"
+#include "domain/services/registry.h"
+#include "domain/services/relocatable_objects.h"
+#include "domain/services/save_data.h"
+#include "ports/input_source.h"
+
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <string>
+#include <vector>
+
+namespace hexlith::application {
+
+// The title's process as the console starts it: its executable loaded from the
+// cartridge into a fresh address space, its main thread at the entry point, the
+// device memory its extended header grants mapped, and srv: answering for
+// every service the boot reaches. Nothing has run yet.
+//
+// The cartridge image outlives the process, which serves the RomFS straight
+// out of it.
+class BootedTitle {
+public:
+    // From the executable partition of a cartridge image: its extended header,
+    // its .code, decompressed when the header says so, and level 3 of its
+    // RomFS.
+    static core::Result<std::unique_ptr<BootedTitle>> FromCartridge(core::ByteSpan image,
+                                                                    std::size_t partition);
+
+    // Loads a decrypted executable NCCH exported from a CIA. The caller owns its bytes.
+    static core::Result<std::unique_ptr<BootedTitle>> FromNcch(core::ByteSpan partition);
+
+    BootedTitle(const BootedTitle&) = delete;
+    BootedTitle& operator=(const BootedTitle&) = delete;
+    BootedTitle(BootedTitle&&) = delete;
+    BootedTitle& operator=(BootedTitle&&) = delete;
+    ~BootedTitle() = default;
+
+    domain::kernel::Kernel& Kernel() {
+        return kernel_;
+    }
+
+    [[nodiscard]] const domain::ctr::ExHeader& Header() const {
+        return header_;
+    }
+
+    // The title's save data, empty and unformatted until something restores
+    // it or the game formats it.
+    domain::services::SaveData& Save() {
+        return *save_;
+    }
+
+    // Its extra data archives, none until the game creates one.
+    domain::services::ExtraData& Extra() {
+        return *extra_;
+    }
+
+    // ldr:ro, for what it has loaded.
+    [[nodiscard]] const domain::services::RelocatableObjects& Loader() const {
+        return *loader_;
+    }
+
+    domain::services::RelocatableObjects& Loader() {
+        return *loader_;
+    }
+
+    // Hands the player's input to hid:USER, which asks for it by the frame
+    // it is in. The source must outlive the title.
+    void UseInput(ports::InputSource& source);
+
+    // SHA-256 of the executable's code as it was loaded, which lifted code is
+    // checked against.
+    [[nodiscard]] const std::string& CodeDigest() const {
+        return code_digest_;
+    }
+
+    // gsp::Gpu, which keeps the count of frames.
+    [[nodiscard]] const domain::services::Graphics& Gpu() const {
+        return *graphics_;
+    }
+
+    domain::services::Graphics& Gpu() {
+        return *graphics_;
+    }
+
+private:
+    BootedTitle(domain::ctr::ExHeader header, core::ByteSpan romfs);
+
+    core::Status Start(core::ByteSpan code);
+
+    domain::ctr::ExHeader header_;
+    std::string code_digest_;
+    core::ByteSpan romfs_;
+    domain::kernel::Kernel kernel_;
+    domain::services::ServiceRegistry registry_;
+    std::shared_ptr<domain::services::SaveData> save_;
+    std::shared_ptr<domain::services::ExtraData> extra_;
+    std::shared_ptr<domain::services::RelocatableObjects> loader_;
+    std::shared_ptr<domain::services::Graphics> graphics_;
+    std::shared_ptr<domain::services::HumanInterface> human_interface_;
+};
+
+// How a range of the process's memory compares with bytes captured elsewhere,
+// such as a dump of the same moment out of Azahar.
+struct MemoryComparison {
+    // Whether every byte of the range is mapped.
+    bool readable = false;
+    std::size_t differing = 0;
+    std::optional<std::size_t> first_difference;
+};
+
+MemoryComparison CompareMemory(const domain::memory::ProcessMemory& memory,
+                               std::uint32_t address,
+                               core::ByteSpan expected);
+
+}  // namespace hexlith::application
+
+#endif  // HEXLITH_APPLICATION_BOOT_H

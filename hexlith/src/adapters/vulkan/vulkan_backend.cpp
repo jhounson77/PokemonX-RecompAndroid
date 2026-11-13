@@ -1,0 +1,2608 @@
+#include "adapters/vulkan/vulkan_backend.h"
+#include "adapters/vulkan/render_scale.h"
+
+#include "adapters/vulkan/fragment_shader.h"
+#include "adapters/vulkan/glsl_compiler.h"
+#include "domain/gpu/command_processor.h"
+#include "domain/gpu/float24.h"
+#include "domain/gpu/pixel_formats.h"
+#include "domain/gpu/reference_renderer.h"
+#include "domain/gpu/shader_glsl.h"
+#include "domain/gpu/texture_cache.h"
+#include "domain/gpu/vertex_stage.h"
+
+#include <algorithm>
+#include <array>
+#include <bit>
+#include <chrono>
+#include <cmath>
+#include <cstring>
+#include <deque>
+#include <format>
+#include <future>
+#include <map>
+#include <optional>
+#include <unordered_map>
+#include <vector>
+
+namespace hexlith::adapters::vulkan {
+namespace {
+
+namespace gpu = domain::gpu;
+
+constexpr std::uint32_t Field(std::uint32_t word, unsigned low, unsigned width) {
+    return (word >> low) & ((1U << width) - 1);
+}
+
+// Registers the backend reads on the CPU. Source: GBATEK, as cited in
+// docs/formats/pica-registers.md.
+namespace reg {
+constexpr std::uint16_t FaceCulling = 0x040;
+constexpr std::uint16_t ViewportHalfWidth = 0x041;
+constexpr std::uint16_t ViewportHalfHeight = 0x043;
+constexpr std::uint16_t ClipEnable = 0x047;
+constexpr std::uint16_t ClipCoefficientFirst = 0x048;
+constexpr std::uint16_t ViewportCorner = 0x068;
+constexpr std::uint16_t TextureConfig = 0x080;
+constexpr std::uint16_t ColorOperation = 0x100;
+constexpr std::uint16_t BlendFunction = 0x101;
+constexpr std::uint16_t LogicOperation = 0x102;
+constexpr std::uint16_t BlendColor = 0x103;
+constexpr std::uint16_t StencilTest = 0x105;
+constexpr std::uint16_t StencilOperation = 0x106;
+constexpr std::uint16_t DepthColorMask = 0x107;
+constexpr std::uint16_t ColorWrite = 0x113;
+constexpr std::uint16_t DepthWrite = 0x115;
+constexpr std::uint16_t DepthFormat = 0x116;
+constexpr std::uint16_t ColorFormat = 0x117;
+constexpr std::uint16_t DepthAddress = 0x11C;
+constexpr std::uint16_t ColorAddress = 0x11D;
+constexpr std::uint16_t Dimensions = 0x11E;
+}  // namespace reg
+
+constexpr std::array<std::uint16_t, 3> UnitDimensions = {0x082, 0x092, 0x09A};
+constexpr std::array<std::uint16_t, 3> UnitLevels = {0x084, 0x094, 0x09C};
+constexpr std::array<std::uint16_t, 3> UnitAddress = {0x085, 0x095, 0x09D};
+constexpr std::array<std::uint16_t, 3> UnitFormat = {0x08E, 0x096, 0x09E};
+
+// The words the fragment shader reads for a draw, as fragment_shader.cpp
+// lays them out.
+constexpr std::size_t RegisterWords = gpu::RegisterCount;
+constexpr std::size_t LightingWords =
+    gpu::PicaState::LightingLuts * gpu::PicaState::LightingLutEntries;
+constexpr std::size_t FogWords = gpu::PicaState::FogLutEntries;
+constexpr std::size_t LevelsPerUnit = 16;
+constexpr std::size_t LevelWords = 3 * LevelsPerUnit;
+// The vertex shader's uniforms, for a draw whose vertices the GPU shades.
+constexpr std::size_t FloatUniformWords = gpu::ShaderUnitState::FloatUniforms * 4;
+constexpr std::size_t UniformWords = FloatUniformWords + 1 + gpu::ShaderUnitState::IntUniforms;
+constexpr std::size_t DrawWords =
+    RegisterWords + LightingWords + FogWords + LevelWords + UniformWords;
+constexpr std::uint32_t NoLevel = 0xFFFFFFFF;
+
+// A vertex as the vertex shader takes it: the 24 semantic slots.
+constexpr std::size_t VertexFloats = gpu::OutputVertex::Slots;
+// A vertex the GPU shades: its sixteen input registers.
+constexpr std::size_t InputFloats = gpu::ShaderRegisters::Count * 4;
+
+// The shaders' push constants, std430: the draw, the sampling mode, the
+// buffer's height, the clip plane, and the PICA's viewport.
+struct PushConstants {
+    std::uint32_t draw = 0;
+    std::uint32_t sampling = 0;
+    std::uint32_t height = 0;
+    std::uint32_t clip_enabled = 0;
+    std::array<float, 4> clip_plane{};
+    std::array<float, 4> viewport{};
+    std::array<std::uint32_t, 4> resolution{1,0,0,0};
+};
+
+constexpr VkFormat ColorImageFormat = VK_FORMAT_R8G8B8A8_UNORM;
+constexpr VkFormat DepthImageFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
+
+// The fixed-function state a draw's pipeline is built for, as the register
+// words it comes from.
+struct PipelineKey {
+    std::array<std::uint32_t, 11> words{};
+    // The vertex program the GPU shades the draw's vertices with, or zero
+    // for vertices shaded on the CPU.
+    std::uint64_t program = 0;
+    // The fragment shader made for the draw's configuration, or zero for the
+    // one that reads it from the registers.
+    std::uint32_t fragment = 0;
+    auto operator<=>(const PipelineKey&) const = default;
+};
+
+PipelineKey KeyOf(const gpu::RegisterFile& registers) {
+    return {.words = {Field(registers.at(reg::FaceCulling), 0, 2),
+                      registers.at(reg::ColorOperation),
+                      registers.at(reg::BlendFunction),
+                      registers.at(reg::LogicOperation),
+                      registers.at(reg::BlendColor),
+                      registers.at(reg::StencilTest),
+                      registers.at(reg::StencilOperation),
+                      registers.at(reg::DepthColorMask),
+                      Field(registers.at(reg::ColorWrite), 0, 4),
+                      Field(registers.at(reg::DepthWrite), 0, 2),
+                      Field(registers.at(reg::DepthFormat), 0, 2)}};
+}
+
+// What the fragment stage of a draw is configured to do, as far as a shader
+// made for the draw would be built for it: the combiners' sources, operands,
+// operations and scales, the textures' formats and modes, the fog, lighting
+// and alpha test registers. What the stage only reads as numbers is left out:
+// the combiners' constant colours (offset 3 of a stage), the textures' addresses,
+// sizes and levels, and the lighting tables' data. Source: GBATEK, as cited in
+// docs/formats/pica-registers.md.
+constexpr std::size_t FragmentConfigurationSize = 1 + 6 + (6 * 4) + 3 + 25;
+
+constexpr std::array<std::uint16_t, FragmentConfigurationSize> FragmentConfigurationRegisters() {
+    constexpr std::array<std::uint16_t, 6> StageBases = {0x0C0, 0x0C8, 0x0D0, 0x0D8, 0x0F0, 0x0F8};
+    constexpr std::array<std::uint16_t, 4> StageWords = {0, 1, 2, 4};
+    constexpr std::array<std::uint16_t, 6> UnitModes = {0x083, 0x093, 0x09B, 0x08E, 0x096, 0x09E};
+    constexpr std::array<std::uint16_t, 3> Others = {
+        0x0E0, 0x0E1, 0x104};  // fog, fog colour, alpha
+    constexpr std::uint16_t LightingFirst = 0x1C0;
+    constexpr std::uint16_t LightingLutIndex = 0x1C5;
+    constexpr std::uint16_t LightingLast = 0x1D9;
+    std::array<std::uint16_t, FragmentConfigurationSize> ids{};
+    std::size_t at = 0;
+    ids.at(at++) = reg::TextureConfig;
+    for (const std::uint16_t mode : UnitModes) {
+        ids.at(at++) = mode;
+    }
+    for (const std::uint16_t base : StageBases) {
+        for (const std::uint16_t word : StageWords) {
+            ids.at(at++) = static_cast<std::uint16_t>(base + word);
+        }
+    }
+    for (const std::uint16_t id : Others) {
+        ids.at(at++) = id;
+    }
+    for (std::uint16_t id = LightingFirst; id <= LightingLast; ++id) {
+        if (id != LightingLutIndex) {
+            ids.at(at++) = id;
+        }
+    }
+    return ids;
+}
+
+constexpr auto FragmentRegisters = FragmentConfigurationRegisters();
+
+using FragmentConfiguration = std::array<std::uint32_t, FragmentConfigurationSize>;
+
+FragmentConfiguration FragmentConfigurationOf(const gpu::RegisterFile& registers) {
+    FragmentConfiguration words{};
+    for (std::size_t at = 0; at < FragmentRegisters.size(); ++at) {
+        words.at(at) = registers.at(FragmentRegisters.at(at));
+    }
+    return words;
+}
+
+// FNV-1a over the words: a draw's configuration is looked up for every draw.
+struct FragmentConfigurationHash {
+    std::size_t operator()(const FragmentConfiguration& words) const {
+        constexpr std::uint64_t Basis = 14695981039346656037ULL;
+        constexpr std::uint64_t Prime = 1099511628211ULL;
+        std::uint64_t hash = Basis;
+        for (const std::uint32_t word : words) {
+            hash = (hash ^ word) * Prime;
+        }
+        return static_cast<std::size_t>(hash);
+    }
+};
+
+// Where a draw draws: the colour and depth buffers and their size.
+struct Target {
+    std::uint32_t color_address = 0;
+    std::uint32_t depth_address = 0;
+    gpu::PixelFormat color_format = gpu::PixelFormat::Rgba8;
+    gpu::DepthFormat depth_format = gpu::DepthFormat::D16;
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
+
+    bool operator==(const Target&) const = default;
+
+    [[nodiscard]] std::uint32_t ColorBytes() const {
+        return width * height * static_cast<std::uint32_t>(gpu::BytesPerPixel(color_format));
+    }
+
+    [[nodiscard]] std::uint32_t DepthBytes() const {
+        return width * height * static_cast<std::uint32_t>(gpu::BytesPerPixel(depth_format));
+    }
+};
+
+std::optional<Target> TargetOf(const gpu::RegisterFile& registers) {
+    constexpr std::uint32_t AddressMask = 0x0FFFFFFF;
+    constexpr unsigned AddressShift = 3;
+    const std::optional<gpu::PixelFormat> color =
+        gpu::ColorBufferFormat(Field(registers.at(reg::ColorFormat), 16, 3));
+    const std::optional<gpu::DepthFormat> depth =
+        gpu::DepthBufferFormat(Field(registers.at(reg::DepthFormat), 0, 2));
+    const std::uint32_t dimensions = registers.at(reg::Dimensions);
+    if (!color || !depth) {
+        return std::nullopt;
+    }
+    return Target{.color_address = (registers.at(reg::ColorAddress) & AddressMask) << AddressShift,
+                  .depth_address = (registers.at(reg::DepthAddress) & AddressMask) << AddressShift,
+                  .color_format = *color,
+                  .depth_format = *depth,
+                  .width = Field(dimensions, 0, 11),
+                  .height = Field(dimensions, 12, 10) + 1};
+}
+
+bool Overlaps(std::uint32_t first,
+              std::uint32_t first_size,
+              std::uint32_t second,
+              std::uint32_t second_size) {
+    return first < second + second_size && second < first + first_size;
+}
+
+// Adds the time between its making and its end to a total.
+class Stopwatch {
+public:
+    explicit Stopwatch(std::chrono::nanoseconds& total)
+        : total_(&total), began_(std::chrono::steady_clock::now()) {}
+
+    Stopwatch(const Stopwatch&) = delete;
+    Stopwatch& operator=(const Stopwatch&) = delete;
+    Stopwatch(Stopwatch&&) = delete;
+    Stopwatch& operator=(Stopwatch&&) = delete;
+
+    ~Stopwatch() {
+        *total_ += std::chrono::steady_clock::now() - began_;
+    }
+
+private:
+    std::chrono::nanoseconds* total_;
+    std::chrono::steady_clock::time_point began_;
+};
+
+// One PICA draw waiting for the list to end.
+struct PendingDraw {
+    // Whether first_vertex counts in the GPU-shaded vertices' inputs rather
+    // than the CPU-shaded vertices.
+    bool shaded_on_gpu = false;
+    std::uint32_t first_vertex = 0;
+    std::uint32_t vertices = 0;
+    PipelineKey key;
+    Target target;
+    PushConstants push;
+    VkViewport viewport{};
+    std::array<float,4> blend_constants{};
+    std::uint32_t stencil_reference=0,stencil_compare_mask=0,stencil_write_mask=0;
+};
+
+VkCompareOp CompareOp(std::uint32_t function) {
+    constexpr std::array<VkCompareOp, 8> Ops = {VK_COMPARE_OP_NEVER,
+                                                VK_COMPARE_OP_ALWAYS,
+                                                VK_COMPARE_OP_EQUAL,
+                                                VK_COMPARE_OP_NOT_EQUAL,
+                                                VK_COMPARE_OP_LESS,
+                                                VK_COMPARE_OP_LESS_OR_EQUAL,
+                                                VK_COMPARE_OP_GREATER,
+                                                VK_COMPARE_OP_GREATER_OR_EQUAL};
+    return Ops.at(function & 7U);
+}
+
+VkStencilOp StencilOp(std::uint32_t action) {
+    constexpr std::array<VkStencilOp, 8> Ops = {VK_STENCIL_OP_KEEP,
+                                                VK_STENCIL_OP_ZERO,
+                                                VK_STENCIL_OP_REPLACE,
+                                                VK_STENCIL_OP_INCREMENT_AND_CLAMP,
+                                                VK_STENCIL_OP_DECREMENT_AND_CLAMP,
+                                                VK_STENCIL_OP_INVERT,
+                                                VK_STENCIL_OP_INCREMENT_AND_WRAP,
+                                                VK_STENCIL_OP_DECREMENT_AND_WRAP};
+    return Ops.at(action & 7U);
+}
+
+// GPUREG_BLEND_FUNC's factors; the value nobody has described is taken as
+// the source colour, as the reference takes it.
+VkBlendFactor BlendFactor(std::uint32_t factor) {
+    constexpr std::array<VkBlendFactor, 16> Factors = {VK_BLEND_FACTOR_ZERO,
+                                                       VK_BLEND_FACTOR_ONE,
+                                                       VK_BLEND_FACTOR_SRC_COLOR,
+                                                       VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR,
+                                                       VK_BLEND_FACTOR_DST_COLOR,
+                                                       VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR,
+                                                       VK_BLEND_FACTOR_SRC_ALPHA,
+                                                       VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                                                       VK_BLEND_FACTOR_DST_ALPHA,
+                                                       VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA,
+                                                       VK_BLEND_FACTOR_CONSTANT_COLOR,
+                                                       VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR,
+                                                       VK_BLEND_FACTOR_CONSTANT_ALPHA,
+                                                       VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA,
+                                                       VK_BLEND_FACTOR_SRC_ALPHA_SATURATE,
+                                                       VK_BLEND_FACTOR_SRC_COLOR};
+    return Factors.at(factor & 0xFU);
+}
+
+VkBlendOp BlendOp(std::uint32_t equation) {
+    constexpr std::array<VkBlendOp, 8> Ops = {VK_BLEND_OP_ADD,
+                                              VK_BLEND_OP_SUBTRACT,
+                                              VK_BLEND_OP_REVERSE_SUBTRACT,
+                                              VK_BLEND_OP_MIN,
+                                              VK_BLEND_OP_MAX,
+                                              VK_BLEND_OP_ADD,
+                                              VK_BLEND_OP_ADD,
+                                              VK_BLEND_OP_ADD};
+    return Ops.at(equation & 7U);
+}
+
+// GPUREG_LOGIC_OP's sixteen operations in Vulkan's names; the reference's
+// table in fragment_stage.cpp is the same order.
+VkLogicOp LogicOp(std::uint32_t operation) {
+    constexpr std::array<VkLogicOp, 16> Ops = {VK_LOGIC_OP_CLEAR,
+                                               VK_LOGIC_OP_AND,
+                                               VK_LOGIC_OP_AND_REVERSE,
+                                               VK_LOGIC_OP_COPY,
+                                               VK_LOGIC_OP_SET,
+                                               VK_LOGIC_OP_COPY_INVERTED,
+                                               VK_LOGIC_OP_NO_OP,
+                                               VK_LOGIC_OP_INVERT,
+                                               VK_LOGIC_OP_NAND,
+                                               VK_LOGIC_OP_OR,
+                                               VK_LOGIC_OP_NOR,
+                                               VK_LOGIC_OP_XOR,
+                                               VK_LOGIC_OP_EQUIVALENT,
+                                               VK_LOGIC_OP_AND_INVERTED,
+                                               VK_LOGIC_OP_OR_REVERSE,
+                                               VK_LOGIC_OP_OR_INVERTED};
+    return Ops.at(operation & 0xFU);
+}
+
+// GPUREG_FACECULLING_CONFIG: 1 keeps clockwise triangles, 2 counter-
+// clockwise ones. With y flipped, a triangle counter-clockwise for the PICA
+// is counter-clockwise for Vulkan too, so that is the front.
+VkCullModeFlags CullMode(std::uint32_t cull) {
+    switch (cull) {
+    case 1:
+        return VK_CULL_MODE_FRONT_BIT;
+    case 2:
+        return VK_CULL_MODE_BACK_BIT;
+    default:
+        return VK_CULL_MODE_NONE;
+    }
+}
+
+// An image and its memory on the device.
+struct Image {
+    VkImage image = VK_NULL_HANDLE;
+    VkDeviceMemory memory = VK_NULL_HANDLE;
+    VkImageView view = VK_NULL_HANDLE;
+};
+
+// The colour and depth images of one size, and the framebuffer over them.
+struct Attachments {
+    Image color;
+    Image depth;
+    VkFramebuffer framebuffer = VK_NULL_HANDLE;
+};
+
+// Where an image stands with respect to the memory it stands for (ADR 0030).
+enum class PartState : std::uint8_t {
+    // Memory is the truth and the image is unknown.
+    Stale,
+    // The image and memory hold the same.
+    Clean,
+    // The image is newer than memory.
+    Dirty
+};
+
+struct Part {
+    PartState state = PartState::Stale;
+    // Memory's bytes as they were when the image last agreed with them.
+    std::vector<std::uint8_t> snapshot;
+};
+
+// A target kept on the device between lists: its images and the state of its
+// colour and its depth, which are written back and dropped apart.
+struct Slot {
+    Target target;
+    Attachments images;
+    Part color;
+    Part depth;
+    std::uint64_t used = 0;
+    std::uint64_t resident_id=0,color_revision=0;
+};
+
+// The host-visible buffers a submission reads or fills. They are made when a
+// group first needs one, kept between groups, and made again only when a group
+// needs more than the one kept holds.
+enum class Scratch : std::uint8_t { Staging, Vertices, Inputs, Words, Texels };
+constexpr std::size_t ScratchCount = 5;
+
+// A native-resolution snapshot of a resident color target. Kept by every
+// submission that samples it, so no CPU wait/readback is needed to use it.
+struct TextureSnapshot {std::unique_ptr<HostBuffer> pixels;Image native;std::uint32_t width=0,height=0;bool initialized=false;Ticket ticket=0;std::uint64_t revision=0;};
+struct TextureCopy {std::uint32_t offset=0;std::shared_ptr<TextureSnapshot> snapshot;};
+
+// What a group of draws owns until the device has finished with it: its
+// buffers and the descriptor set that points at two of them. A group takes the
+// next frame of the ring, and waits for the device only if that frame's last
+// group has not finished. ADR 0032.
+struct Frame {
+    std::array<std::unique_ptr<HostBuffer>, ScratchCount> buffers;
+    VkDescriptorSet set = VK_NULL_HANDLE;
+    Ticket ticket = 0;
+    std::vector<std::shared_ptr<TextureSnapshot>> textures;
+};
+
+// How many groups of draws may be with the device at once. A game that draws
+// more than this in one frame waits for the oldest.
+constexpr std::size_t FramesInFlight = 4;
+
+// A display transfer given to the device whose output is not in memory yet
+// (ADR 0033): the first pixels of a target's colour image, in rows, in a buffer
+// the host reads when something needs the bytes, and what memory held over the
+// range when the transfer was made, to tell a later write from the transfer's.
+struct PendingTransfer {
+    gpu::MemoryRange range;
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
+    std::uint32_t scale = 1;
+    std::unique_ptr<HostBuffer> pixels;
+    std::vector<std::uint8_t> before;
+    Ticket ticket = 0;
+};
+
+// A transfer the backend can do: the target it reads and the pixels it writes.
+struct DeviceTransfer {
+    Slot* slot = nullptr;
+    // The first row of the target's image the transfer reads.
+    std::uint32_t first_row = 0;
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
+    gpu::MemoryRange output;
+};
+
+// How many targets stay resident; the least recently used is written back to
+// make room. The title draws to a handful.
+constexpr std::size_t MaxResidentTargets = 16;
+
+}  // namespace
+
+class VulkanGpuBackend::Implementation {
+public:
+    Implementation(VulkanContext& context,
+                   gpu::GpuMemory& memory,
+                   gpu::Sampling sampling,
+                   VertexShading shading,
+                   FragmentShading fragments, std::uint32_t scale, bool resident_textures)
+        : context_(&context),
+          device_(context.Device()),
+          memory_(&memory),
+          sampling_(sampling),
+          shading_(shading),
+          fragments_(fragments),
+          scale_(scale),
+          resident_textures_(resident_textures&&(scale==1||context.SupportsRgbaBlit())),
+          vertices_(memory),
+          executor_{this},
+          processor_(state_, memory, executor_) {}
+
+    Implementation(const Implementation&) = delete;
+    Implementation& operator=(const Implementation&) = delete;
+    Implementation(Implementation&&) = delete;
+    Implementation& operator=(Implementation&&) = delete;
+    ~Implementation();
+
+    core::Status Initialise();
+    const gpu::Picture* BorrowHighResolutionScreen(const gpu::MemoryRange& range) {
+        auto found = screen_copies_.find(range.start);
+        if(found==screen_copies_.end() || found->second.native.size()!=range.size) return nullptr;
+        auto memory=std::as_const(*memory_).Bytes(range.start,range.size);
+        if(memory.size()!=range.size || std::memcmp(memory.data(),found->second.native.data(),range.size)!=0) return nullptr;
+        return &found->second.picture;
+    }
+
+    std::shared_ptr<TextureSnapshot> ResidentTexture(std::uint32_t address,gpu::TextureFormat format,std::uint32_t width,std::uint32_t height);
+    core::Status RunCommandList(std::span<const std::uint8_t> list);
+
+    core::Result<bool> RunDisplayTransfer(const gpu::TransferConfig& transfer);
+
+    core::Status BeforeRead(std::uint32_t physical, std::uint32_t size) {
+        return MakeTrue({.start = physical, .size = size});
+    }
+
+    core::Status BeforeWrite(std::uint32_t physical, std::uint32_t size) {
+        for(auto i=screen_copies_.begin();i!=screen_copies_.end();){
+            if(Overlaps(physical,size,i->first,static_cast<std::uint32_t>(i->second.native.size()))) i=screen_copies_.erase(i);else ++i;
+        }
+        return Forget({.start = physical, .size = size}, true, nullptr);
+    }
+
+    [[nodiscard]] ports::GpuBackendStatistics Statistics() const {
+        return {.lists = lists_,
+                .draws = draws_,
+                .gpu_shaded_draws = gpu_shaded_draws_,
+                .resident_texture_copies = resident_texture_copies_,
+                .resident_texture_samples = resident_texture_samples_,
+                .groups = groups_,
+                .uploaded_bytes = uploaded_bytes_,
+                .downloaded_bytes = downloaded_bytes_,
+                .allocations = allocations_,
+                .conflicts = conflicts_,
+                .waits = waits_,
+                .transfers = transfers_,
+                .pipelines = pipelines_.size(),
+                .fragment_configurations = fragment_numbers_.size(),
+                .fallback_draws = fallback_draws_,
+                .times = times_,
+                .unsupported = unsupported_ || vertices_.Statistics().unsupported_shader};
+    }
+
+    [[nodiscard]] std::string DeviceName() const {
+        return context_->DeviceName();
+    }
+
+    [[nodiscard]] std::uint64_t GpuShadedDraws() const {
+        return gpu_shaded_draws_;
+    }
+
+    [[nodiscard]] gpu::Sampling SamplingMode() const {
+        return sampling_;
+    }
+
+    // The command processor's executor, handing on to the implementation.
+    struct Executor {
+        Implementation* self;
+
+        void Draw(gpu::PicaState& state, bool indexed) const {
+            if (self->shading_ == VertexShading::GpuWherePossible &&
+                self->vertices_.TakesWholeTriangles(state) && self->QueueShaded(state, indexed)) {
+                return;
+            }
+            {const Stopwatch timer{self->times_.vertices};self->vertices_.Draw(state, indexed);}
+            self->Queue(state);
+        }
+
+        void ImmediateVertex(gpu::PicaState& state) const {
+            {const Stopwatch timer{self->times_.vertices};self->vertices_.ImmediateVertex(state);}
+            self->Queue(state);
+        }
+
+        void RestartPrimitive(gpu::PicaState& state) const {
+            self->vertices_.RestartPrimitive(state);
+        }
+
+        void Finalize() {}
+    };
+
+private:
+    void Queue(const gpu::PicaState& state);
+    bool QueueShaded(const gpu::PicaState& state, bool indexed);
+    std::optional<PendingDraw> Prepare(const gpu::PicaState& state);
+    core::Result<VkShaderModule> ShadedModule(const gpu::PicaState& state, std::uint64_t key);
+    // The number of the draw's configuration, new to the backend when it has not
+    // been met, with its shader made then if the draws are specialised.
+    core::Result<std::uint32_t> FragmentConfigurationNumber(const gpu::RegisterFile& registers);
+    void StartFragmentShader(const FragmentConfiguration& configuration, std::uint32_t number);
+    void WriteDrawWords(const gpu::PicaState& state, std::uint32_t index);
+    std::uint32_t Decode(std::uint32_t address,
+                         gpu::TextureFormat format,
+                         std::uint32_t width,
+                         std::uint32_t height);
+    [[nodiscard]] bool ReadsPendingTarget(const gpu::RegisterFile& registers) const;
+    core::Status Flush();
+    core::Status DrawGroup(std::size_t first, std::size_t end);
+    core::Result<VkPipeline>
+    BuildPipeline(const PipelineKey& key, VkShaderModule vertex, VkShaderModule fragment) const;
+    core::Result<VkPipeline> Pipeline(const PipelineKey& key);
+    void StartPipeline(const PipelineKey& key);
+    core::Status CreateAttachments(Attachments& made, std::uint32_t width, std::uint32_t height);
+    void DestroyAttachments(Attachments& attachments);
+    core::Result<Slot*> SlotFor(const Target& target);
+    core::Status WriteBack(Slot& slot, bool color, bool depth);
+    core::Status MakeTrue(const gpu::MemoryRange& range);
+    core::Status Forget(const gpu::MemoryRange& range, bool overwritten, const Slot* except);
+    core::Status WriteBackAll();
+    std::optional<DeviceTransfer> Carries(const gpu::TransferConfig& transfer);
+    core::Result<PendingTransfer> TakePending(VkDeviceSize pixel_bytes);
+    core::Status ResolveOutputs(const gpu::MemoryRange& range, bool drop_covered);
+    core::Status Resolve(PendingTransfer& pending);
+    core::Result<HostBuffer*>
+    Reserve(std::unique_ptr<HostBuffer>& kept, Scratch which, VkDeviceSize size);
+    void TakeSnapshot(Part& part, const gpu::MemoryRange& range);
+    [[nodiscard]] bool MemoryChanged(const Part& part, const gpu::MemoryRange& range) const;
+    core::Status CreateImage(Image& image,
+                             VkFormat format,
+                             VkImageUsageFlags usage,
+                             VkImageAspectFlags aspect,
+                             std::uint32_t width,
+                             std::uint32_t height);
+    void DestroyImage(Image& image);
+    core::Status CreateLayouts();
+    core::Status CreateRenderPass();
+    core::Status CreateShaders();
+    void UploadColor(const Target& target, std::span<std::uint8_t> color) const;
+    void UploadDepth(const Target& target,
+                     std::span<std::uint8_t> depth,
+                     std::span<std::uint8_t> stencil) const;
+    void DownloadColor(const Target& target, std::span<const std::uint8_t> color) const;
+    void DownloadDepth(const Target& target,
+                       std::span<const std::uint8_t> depth,
+                       std::span<const std::uint8_t> stencil) const;
+
+    void UploadColorNative(const Target&,std::span<std::uint8_t>) const;
+    void UploadDepthNative(const Target&,std::span<std::uint8_t>,std::span<std::uint8_t>) const;
+    void DownloadColorNative(const Target&,std::span<const std::uint8_t>) const;
+    void DownloadDepthNative(const Target&,std::span<const std::uint8_t>,std::span<const std::uint8_t>) const;
+    VulkanContext* context_;
+    VkDevice device_;
+    gpu::GpuMemory* memory_;
+    gpu::Sampling sampling_;
+    VertexShading shading_;
+    FragmentShading fragments_;
+    std::uint32_t scale_=1;
+    struct ScreenCopy {gpu::Picture picture;std::vector<std::uint8_t> native;};
+    std::map<std::uint32_t,ScreenCopy> screen_copies_;
+    gpu::PicaState state_;
+    gpu::VertexPipeline vertices_;
+    Executor executor_;
+    gpu::CommandProcessor<Executor> processor_;
+
+    VkDescriptorSetLayout set_layout_ = VK_NULL_HANDLE;
+    VkPipelineLayout pipeline_layout_ = VK_NULL_HANDLE;
+    VkDescriptorPool descriptor_pool_ = VK_NULL_HANDLE;
+    VkRenderPass render_pass_ = VK_NULL_HANDLE;
+    VkShaderModule vertex_module_ = VK_NULL_HANDLE;
+    VkShaderModule fragment_module_ = VK_NULL_HANDLE;
+    std::map<PipelineKey, VkPipeline> pipelines_;
+    // The configurations draws have had, by the number the pipelines' keys
+    // carry, and the shader made for each when the draws are specialised.
+    std::unordered_map<FragmentConfiguration, std::uint32_t, FragmentConfigurationHash>
+        fragment_numbers_;
+    // The SPIR-V of each configuration's shader, compiled on another thread,
+    // by number; and the pipelines being made from it on others.
+    std::map<std::uint32_t, std::shared_future<core::Result<std::vector<std::uint32_t>>>>
+        compiling_;
+    std::map<PipelineKey, std::future<core::Result<VkPipeline>>> building_;
+    std::uint64_t fallback_draws_ = 0;
+    // Translated vertex programs, by a hash of their code, descriptors and
+    // entry point; a null module for one the translation cannot take.
+    std::map<std::uint64_t, VkShaderModule> shaded_modules_;
+    std::vector<std::unique_ptr<Slot>> slots_;
+    std::uint64_t clock_ = 0;
+    std::array<Frame, FramesInFlight> frames_;
+    std::size_t next_frame_ = 0;
+    // Where a writeback's copy lands. It is waited for before it is read, so
+    // one is enough.
+    std::unique_ptr<HostBuffer> readback_;
+    // Transfers given to the device whose output memory does not hold yet, in
+    // the order they were made; and the buffers of those that are done with.
+    std::deque<PendingTransfer> outputs_;
+    std::vector<PendingTransfer> spare_;
+
+    // What the pending draws of the current list need.
+    std::vector<PendingDraw> pending_;
+    std::vector<float> vertex_data_;
+    std::vector<float> input_data_;
+    std::vector<std::uint32_t> draw_words_;
+    std::vector<std::uint32_t> texels_;
+    std::map<std::array<std::uint32_t, 4>, std::uint32_t> decoded_;
+    bool resident_textures_=false;
+    std::uint64_t resident_texture_copies_=0,resident_texture_samples_=0;
+    std::unordered_map<std::uint64_t,std::shared_ptr<TextureSnapshot>> resident_snapshots_;
+    std::vector<std::shared_ptr<TextureSnapshot>> texture_pool_;
+    std::vector<TextureCopy> texture_copies_;
+    gpu::TextureCache texture_cache_;
+    mutable std::vector<std::uint8_t> color_upload_,depth_upload_,stencil_upload_;
+
+    std::uint64_t lists_ = 0;
+    std::uint64_t draws_ = 0;
+    std::uint64_t gpu_shaded_draws_ = 0;
+    std::uint64_t groups_ = 0;
+    std::uint64_t uploaded_bytes_ = 0;
+    std::uint64_t downloaded_bytes_ = 0;
+    std::uint64_t allocations_ = 0;
+    std::uint64_t conflicts_ = 0;
+    std::uint64_t waits_ = 0;
+    std::uint64_t transfers_ = 0;
+    ports::GpuBackendTimes times_;
+    bool unsupported_ = false;
+};
+
+// ---------------------------------------------------------------------------
+// Collecting a list's draws.
+
+// A draw's target, words, push constants and viewport, or nothing for a
+// draw the backend does not draw. A texture drawn earlier in the list has to
+// be in memory before it is decoded, so the list so far is drawn first.
+std::optional<PendingDraw> VulkanGpuBackend::Implementation::Prepare(const gpu::PicaState& state) {
+    const gpu::RegisterFile& registers = state.Registers();
+    const std::optional<Target> target = TargetOf(registers);
+    // Gas and shadow rendering are not implemented.
+    if (!target || Field(registers.at(reg::ColorOperation), 0, 2) != 0 || target->width == 0) {
+        unsupported_ = true;
+        return std::nullopt;
+    }
+    if (ReadsPendingTarget(registers)) {
+        if (const core::Status flushed = Flush(); !flushed) {
+            unsupported_ = true;
+        }
+    }
+    PendingDraw draw;
+    draw.key = KeyOf(registers);
+    for(unsigned channel=0;channel<4;++channel)draw.blend_constants[channel]=static_cast<float>(Field(draw.key.words[4],8*channel,8))/255.0F;
+    draw.stencil_reference=Field(draw.key.words[5],16,8);draw.stencil_compare_mask=Field(draw.key.words[5],24,8);
+    draw.stencil_write_mask=draw.key.words[9]!=0?Field(draw.key.words[5],8,8):0;
+    draw.key.words[4]=0;draw.key.words[5]&=0x71U; // only enable and compare operation remain static
+    const core::Result<std::uint32_t> number = FragmentConfigurationNumber(registers);
+    if (!number) {
+        unsupported_ = true;
+        return std::nullopt;
+    }
+    if (fragments_ == FragmentShading::Specialised) {
+        draw.key.fragment = number.Value();
+    }
+    draw.target = *target;
+    const auto index = static_cast<std::uint32_t>(pending_.size());
+    WriteDrawWords(state, index);
+    draw.push.draw = index;
+    draw.push.sampling = sampling_ == gpu::Sampling::AzaharSoftware ? 1U : 0U;
+    draw.push.height = target->height;
+    draw.push.resolution[0] = scale_;
+    draw.push.clip_enabled = Field(registers.at(reg::ClipEnable), 0, 1);
+    for (std::size_t at = 0; at < 4; ++at) {
+        draw.push.clip_plane.at(at) = gpu::Float24ToFloat32(
+            Field(registers.at(static_cast<std::uint16_t>(reg::ClipCoefficientFirst + at)), 0, 24));
+    }
+    // The PICA's viewport maps y up from the bottom of the buffer; the
+    // vertex shader flips y, so the viewport starts as far from the top as
+    // the PICA's ends from the bottom.
+    const float half_width =
+        gpu::Float24ToFloat32(Field(registers.at(reg::ViewportHalfWidth), 0, 24));
+    const float half_height =
+        gpu::Float24ToFloat32(Field(registers.at(reg::ViewportHalfHeight), 0, 24));
+    const std::uint32_t corner = registers.at(reg::ViewportCorner);
+    const auto offset_x =
+        static_cast<float>(static_cast<std::int32_t>(Field(corner, 0, 10) << 22U) >> 22);
+    const auto offset_y =
+        static_cast<float>(static_cast<std::int32_t>(Field(corner, 16, 10) << 22U) >> 22);
+    draw.push.viewport = {half_width, half_height, offset_x, offset_y};
+    draw.viewport =
+        VkViewport{.x = offset_x,
+                   .y = static_cast<float>(target->height) - (2.0F * half_height) - offset_y,
+                   .width = 2.0F * half_width,
+                   .height = 2.0F * half_height,
+                   .minDepth = 0.0F,
+                   .maxDepth = 1.0F};
+    return draw;
+}
+
+// A draw whose vertices the CPU shaded and assembled.
+void VulkanGpuBackend::Implementation::Queue(const gpu::PicaState& state) {
+    std::vector<gpu::PrimitiveAssembler::Triangle>& triangles = vertices_.Triangles();
+    ++draws_;
+    if (triangles.empty()) {
+        return;
+    }
+    std::optional<PendingDraw> draw = Prepare(state);
+    if (!draw) {
+        triangles.clear();
+        return;
+    }
+    draw->first_vertex = static_cast<std::uint32_t>(vertex_data_.size() / VertexFloats);
+    draw->vertices = static_cast<std::uint32_t>(triangles.size() * 3);
+    for (const gpu::PrimitiveAssembler::Triangle& triangle : triangles) {
+        for (const gpu::OutputVertex& vertex : triangle) {
+            vertex_data_.insert(vertex_data_.end(), vertex.values.begin(), vertex.values.end());
+        }
+    }
+    triangles.clear();
+    pending_.push_back(*draw);
+}
+
+namespace {
+
+// The hash a vertex program's translation is kept by: FNV-1a over its entry
+// point, code and descriptors.
+std::uint64_t ProgramKey(const gpu::ShaderUnitState& unit, std::uint32_t entry) {
+    constexpr std::uint64_t Basis = 14695981039346656037ULL;
+    constexpr std::uint64_t Prime = 1099511628211ULL;
+    std::uint64_t key = Basis ^ entry;
+    for (const std::uint32_t word : unit.code) {
+        key = (key ^ word) * Prime;
+    }
+    for (const std::uint32_t word : unit.descriptors) {
+        key = (key ^ word) * Prime;
+    }
+    return key;
+}
+
+}  // namespace
+
+// A draw whose vertices the GPU shades with the translated program: each
+// vertex's inputs loaded and placed as the reference places them, the
+// triangles the vertices three at a time. False, and nothing queued, for a
+// program the translation cannot take.
+bool VulkanGpuBackend::Implementation::QueueShaded(const gpu::PicaState& state, bool indexed) {
+    const std::uint32_t entry =
+        Field(state.Register(gpu::reg::VertexShaderBase + gpu::reg::shader::EntryPoint), 0, 16);
+    const std::uint64_t key = ProgramKey(state.VertexShader(), entry);
+    const core::Result<VkShaderModule> module = ShadedModule(state, key);
+    if (!module || module.Value() == VK_NULL_HANDLE) {
+        return false;
+    }
+    ++draws_;
+    ++gpu_shaded_draws_;
+    const std::uint32_t count = state.Register(gpu::reg::VertexCount);
+    if (count == 0) {
+        return true;
+    }
+    std::optional<PendingDraw> draw = Prepare(state);
+    if (!draw) {
+        return true;
+    }
+    draw->shaded_on_gpu = true;
+    draw->key.program = key;
+    draw->first_vertex = static_cast<std::uint32_t>(input_data_.size() / InputFloats);
+    draw->vertices = count;
+    const gpu::VertexLoader loader(state.Registers());
+    const std::uint32_t first = state.Register(gpu::reg::FirstIndex);
+    for (std::uint32_t at = 0; at < count; ++at) {
+        const std::uint32_t vertex =
+            indexed ? gpu::ReadIndex(*memory_, state.Registers(), at) : at + first;
+        gpu::ShaderRegisters registers;
+        gpu::PlaceInputs(state.Registers(),
+                         gpu::reg::VertexShaderBase,
+                         loader.Load(*memory_, vertex, state.FixedAttributeValues()),
+                         registers);
+        for (const gpu::Vec4& input : registers.inputs) {
+            input_data_.insert(input_data_.end(), input.begin(), input.end());
+        }
+    }
+    pending_.push_back(*draw);
+    return true;
+}
+
+core::Result<std::uint32_t>
+VulkanGpuBackend::Implementation::FragmentConfigurationNumber(const gpu::RegisterFile& registers) {
+    const FragmentConfiguration configuration = FragmentConfigurationOf(registers);
+    if (const auto found = fragment_numbers_.find(configuration);
+        found != fragment_numbers_.end()) {
+        return found->second;
+    }
+    const auto number = static_cast<std::uint32_t>(fragment_numbers_.size() + 1);
+    if (fragments_ == FragmentShading::Specialised) {
+        StartFragmentShader(configuration, number);
+    }
+    fragment_numbers_.emplace(configuration, number);
+    return number;
+}
+
+// The fragment stage with the registers that configure it written in as
+// constants, so that the compiler sees which combiner sources, texture
+// formats and lighting terms are in use and drops the rest. Compiling is
+// started on another thread and waited for by the pipeline that needs it,
+// which is made when the group the draw is in is drawn, after the CPU's work
+// on the draws that follow.
+void VulkanGpuBackend::Implementation::StartFragmentShader(
+    const FragmentConfiguration& configuration, std::uint32_t number) {
+    // Only the registers that configure the stage are written in. A call with a
+    // constant argument folds to its value; one with a loop's counter is
+    // resolved when the loop is unrolled.
+    std::string definitions = "uint reg(uint id) {\n    switch (id) {\n";
+    for (std::size_t at = 0; at < FragmentRegisters.size(); ++at) {
+        definitions += std::format(
+            "    case {}u: return {}u;\n", FragmentRegisters.at(at), configuration.at(at));
+    }
+    definitions += "    default: return words[draw * DrawWords + id];\n    }\n}\n";
+    std::string source = "#version 450\n" + FloatControlLines(context_->Floats()) +
+                         "#define BAKED_REGISTERS\n" + std::string{CommonSource} +
+                         std::string{MultiplySource} + definitions +
+                         std::string{FragmentShaderSource};
+    compiling_.emplace(number, std::async(std::launch::async, [text = std::move(source)] {
+                                   return CompileGlsl(text, ShaderStage::Fragment);
+                               }).share());
+}
+
+core::Result<VkShaderModule>
+VulkanGpuBackend::Implementation::ShadedModule(const gpu::PicaState& state, std::uint64_t key) {
+    if (const auto found = shaded_modules_.find(key); found != shaded_modules_.end()) {
+        return found->second;
+    }
+    const std::uint32_t entry =
+        Field(state.Register(gpu::reg::VertexShaderBase + gpu::reg::shader::EntryPoint), 0, 16);
+    const gpu::GlslShader translated = gpu::TranslateShader(state.VertexShader(), entry);
+    VkShaderModule module = VK_NULL_HANDLE;
+    if (!translated.unsupported) {
+        const std::string source =
+            "#version 450\n" + FloatControlLines(context_->Floats()) + std::string{CommonSource} +
+            std::string{ShadedVertexInputSource} + translated.source +
+            std::string{VertexOutputSource} + std::string{ShadedVertexMainSource};
+        const core::Result<std::vector<std::uint32_t>> spirv =
+            CompileGlsl(source, ShaderStage::Vertex);
+        if (!spirv) {
+            return spirv.Failure();
+        }
+        VkShaderModuleCreateInfo create{};
+        create.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        create.codeSize = spirv.Value().size() * sizeof(std::uint32_t);
+        create.pCode = spirv.Value().data();
+        if (const core::Status made = Check(
+                vkCreateShaderModule(device_, &create, nullptr, &module), "vkCreateShaderModule");
+            !made) {
+            return made.Failure();
+        }
+    }
+    shaded_modules_.emplace(key, module);
+    return module;
+}
+
+// The register file, the tables, and each enabled unit's decoded levels.
+void VulkanGpuBackend::Implementation::WriteDrawWords(const gpu::PicaState& state,
+                                                      std::uint32_t index) {
+    const gpu::RegisterFile& registers = state.Registers();
+    draw_words_.resize(static_cast<std::size_t>(index + 1) * DrawWords, 0);
+    std::uint32_t* words = &draw_words_.at(static_cast<std::size_t>(index) * DrawWords);
+    const std::span<std::uint32_t> out{words, DrawWords};
+    std::ranges::copy(registers, out.begin());
+    std::size_t at = RegisterWords;
+    for (const auto& table : state.LightingLutData()) {
+        std::ranges::copy(table, out.begin() + static_cast<std::ptrdiff_t>(at));
+        at += table.size();
+    }
+    std::ranges::copy(state.FogLut(), out.begin() + static_cast<std::ptrdiff_t>(at));
+    at += FogWords;
+    const gpu::ShaderUnitState& vertex_shader = state.VertexShader();
+    std::size_t uniform = at + LevelWords;
+    for (const gpu::Vec4& value : vertex_shader.float_uniforms) {
+        for (const float component : value) {
+            out[uniform++] = std::bit_cast<std::uint32_t>(component);
+        }
+    }
+    out[uniform++] = vertex_shader.bool_uniforms;
+    std::ranges::copy(vertex_shader.int_uniforms,
+                      out.begin() + static_cast<std::ptrdiff_t>(uniform));
+    for (std::size_t unit = 0; unit < 3; ++unit) {
+        const std::span<std::uint32_t> levels =
+            out.subspan(at + (unit * LevelsPerUnit), LevelsPerUnit);
+        std::ranges::fill(levels, NoLevel);
+        if (Field(registers.at(reg::TextureConfig), static_cast<unsigned>(unit), 1) == 0) {
+            continue;
+        }
+        const std::uint32_t format = Field(registers.at(UnitFormat.at(unit)), 0, 4);
+        const std::uint32_t dimensions = registers.at(UnitDimensions.at(unit));
+        std::uint32_t width = Field(dimensions, 16, 11);
+        std::uint32_t height = Field(dimensions, 0, 11);
+        std::uint32_t address = (registers.at(UnitAddress.at(unit)) & 0x0FFFFFFFU) << 3U;
+        if (format >= gpu::TextureFormatCount || width == 0 || height == 0 || address == 0) {
+            continue;
+        }
+        const std::uint32_t count = std::min<std::uint32_t>(
+            Field(registers.at(UnitLevels.at(unit)), 16, 4) + 1, LevelsPerUnit);
+        for (std::uint32_t level = 0; level < count; ++level) {
+            const auto texture_format = static_cast<gpu::TextureFormat>(format);
+            levels[level] = Decode(address, texture_format, width, height);
+            address += static_cast<std::uint32_t>(gpu::TextureBytes(texture_format, width, height));
+            width = std::max(width / 2, 8U);
+            height = std::max(height / 2, 8U);
+        }
+    }
+}
+
+// A level's texels as the shader reads them, put in the flush's buffer once.
+// What was decoded for an earlier list is found again as long as the texture's
+// bytes are the same.
+std::uint32_t VulkanGpuBackend::Implementation::Decode(std::uint32_t address,
+                                                       gpu::TextureFormat format,
+                                                       std::uint32_t width,
+                                                       std::uint32_t height) {
+    const std::array<std::uint32_t, 4> key = {
+        address, static_cast<std::uint32_t>(format), width, height};
+    if (const auto found = decoded_.find(key); found != decoded_.end()) {
+        return found->second;
+    }
+    const Stopwatch timed{times_.textures};
+    const auto size = static_cast<std::uint32_t>(gpu::TextureBytes(format, width, height));
+    const std::span<const std::uint8_t> bytes = memory_->Bytes(address, size);
+    if (bytes.size() != size) {
+        return NoLevel;
+    }
+    if(auto snapshot=ResidentTexture(address,format,width,height)){
+        const auto offset=static_cast<std::uint32_t>(texels_.size());texels_.resize(texels_.size()+static_cast<std::size_t>(width)*height);
+        texture_copies_.push_back({offset,std::move(snapshot)});decoded_.emplace(key,offset);++resident_texture_samples_;return offset;
+    }
+    // What a target drew may still be only on the device.
+    {const Stopwatch syncing{times_.texture_sync};if (!MakeTrue({.start = address, .size = size})) {
+        unsupported_ = true;
+    }}
+    const auto offset = static_cast<std::uint32_t>(texels_.size());
+    std::span<const std::uint32_t> texels;
+    {const Stopwatch decoding{times_.texture_decode};texels=texture_cache_.Texels(address,format,width,height,bytes);}
+    {const Stopwatch packing{times_.texture_pack};texels_.insert(texels_.end(),texels.begin(),texels.end());}
+    decoded_.emplace(key, offset);
+    return offset;
+}
+
+bool VulkanGpuBackend::Implementation::ReadsPendingTarget(
+    const gpu::RegisterFile& registers) const {
+    for (std::size_t unit = 0; unit < 3; ++unit) {
+        if (Field(registers.at(reg::TextureConfig), static_cast<unsigned>(unit), 1) == 0) {
+            continue;
+        }
+        const std::uint32_t address = (registers.at(UnitAddress.at(unit)) & 0x0FFFFFFFU) << 3U;
+        const std::uint32_t dimensions = registers.at(UnitDimensions.at(unit));
+        // A generous size: the largest format's bytes, every level.
+        const std::uint32_t size = Field(dimensions, 16, 11) * Field(dimensions, 0, 11) * 4 * 2;
+        for (const PendingDraw& draw : pending_) {
+            if (Overlaps(address, size, draw.target.color_address, draw.target.ColorBytes()) ||
+                Overlaps(address, size, draw.target.depth_address, draw.target.DepthBytes())) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+core::Status VulkanGpuBackend::Implementation::RunCommandList(std::span<const std::uint8_t> list) {
+    const Stopwatch total{times_.total};
+    ++lists_;
+    const core::Result<gpu::CommandListRun> run = processor_.Run(list);
+    core::Status flushed = Flush();
+    if (!run) {
+        return run.Failure();
+    }
+    return flushed;
+}
+
+// ---------------------------------------------------------------------------
+// Drawing what is pending.
+
+// Draws in runs that share a target. A run's images stay on the device
+// afterwards (ADR 0030), so nothing is copied back here.
+core::Status VulkanGpuBackend::Implementation::Flush() {
+    std::size_t first = 0;
+    core::Status status;
+    while (status && first < pending_.size()) {
+        std::size_t end = first + 1;
+        while (end < pending_.size() && pending_[end].target == pending_[first].target) {
+            ++end;
+        }
+        status = DrawGroup(first, end);
+        first = end;
+    }
+    pending_.clear();
+    vertex_data_.clear();
+    input_data_.clear();
+    draw_words_.clear();
+    texels_.clear();
+    decoded_.clear();
+    texture_copies_.clear();
+    return status;
+}
+
+// ---------------------------------------------------------------------------
+// Keeping the targets resident (ADR 0030).
+
+namespace {
+
+gpu::MemoryRange ColorRange(const Target& target) {
+    return {.start = target.color_address, .size = target.ColorBytes()};
+}
+
+gpu::MemoryRange DepthRange(const Target& target) {
+    return {.start = target.depth_address, .size = target.DepthBytes()};
+}
+
+bool Overlaps(const gpu::MemoryRange& first, const gpu::MemoryRange& second) {
+    return Overlaps(first.start, first.size, second.start, second.size);
+}
+
+// Whether memory is one pixel repeated, as a memory fill leaves a buffer. The
+// pixels' order, tiled or not, makes no difference to such a buffer, so it can
+// be decoded once.
+bool IsOnePixelRepeated(std::span<const std::uint8_t> bytes, std::size_t pixel_bytes) {
+    return bytes.size() > pixel_bytes &&
+           std::memcmp(bytes.data(), bytes.data() + pixel_bytes, bytes.size() - pixel_bytes) == 0;
+}
+
+bool Covers(const gpu::MemoryRange& outer, const gpu::MemoryRange& inner) {
+    return outer.start <= inner.start && inner.start + inner.size <= outer.start + outer.size;
+}
+
+void PipelineBarrier(VkCommandBuffer commands,
+                     VkPipelineStageFlags from,
+                     VkPipelineStageFlags to,
+                     VkAccessFlags written,
+                     VkAccessFlags read) {
+    VkMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+    barrier.srcAccessMask = written;
+    barrier.dstAccessMask = read;
+    vkCmdPipelineBarrier(commands, from, to, 0, 1, &barrier, 0, nullptr, 0, nullptr);
+}
+
+// What earlier groups drew, in submissions that may still be running, is made
+// visible to a copy out of the images, which the render pass left in the layout
+// the copy reads them in.
+void MakeDrawnVisibleToCopy(VkCommandBuffer commands) {
+    PipelineBarrier(commands,
+                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                        VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                    VK_ACCESS_TRANSFER_READ_BIT);
+}
+
+// What a copy wrote is made visible to the host once the fence is signalled.
+void MakeCopyVisibleToHost(VkCommandBuffer commands) {
+    PipelineBarrier(commands,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    VK_PIPELINE_STAGE_HOST_BIT,
+                    VK_ACCESS_TRANSFER_WRITE_BIT,
+                    VK_ACCESS_HOST_READ_BIT);
+}
+
+}  // namespace
+
+// Independently implemented resident-target texture path. Same architectural
+// principle studied in MH4U for Android: keep GPU-produced images on-device,
+// synchronize guest memory only when it is actually needed by the CPU path.
+std::shared_ptr<TextureSnapshot> VulkanGpuBackend::Implementation::ResidentTexture(std::uint32_t address,gpu::TextureFormat format,std::uint32_t width,std::uint32_t height){
+ if(!resident_textures_||format!=gpu::TextureFormat::Rgba8||width%8||height%8)return {};
+ const gpu::MemoryRange range{address,width*height*4};
+ for(const auto& output:outputs_)if(Overlaps(range,output.range))return {};
+ Slot* source=nullptr;
+ for(const auto& candidate:slots_){const auto&t=candidate->target;if(t.color_address==address&&t.color_format==gpu::PixelFormat::Rgba8&&t.width==width&&t.height==height&&candidate->color.state!=PartState::Stale&&!MemoryChanged(candidate->color,range)&&(!source||candidate->used>source->used))source=candidate.get();}
+ if(!source)return {};
+ if(auto known=resident_snapshots_.find(source->resident_id);known!=resident_snapshots_.end()&&known->second->revision==source->color_revision)return known->second;
+ std::shared_ptr<TextureSnapshot> snapshot;
+ for(const auto& spare:texture_pool_)if(spare.use_count()==1&&spare->width==width&&spare->height==height&&context_->Finished(spare->ticket)){snapshot=spare;break;}
+ if(!snapshot){if(texture_pool_.size()>=32)return {};std::size_t held=0;for(const auto& s:texture_pool_)held+=static_cast<std::size_t>(s->width)*s->height*4*(scale_>1?2:1);if(held+static_cast<std::size_t>(width)*height*4*(scale_>1?2:1)>64U*1024U*1024U)return {};snapshot=std::make_shared<TextureSnapshot>();snapshot->width=width;snapshot->height=height;auto made=HostBuffer::Create(*context_,static_cast<VkDeviceSize>(width)*height*4,VK_BUFFER_USAGE_TRANSFER_SRC_BIT|VK_BUFFER_USAGE_TRANSFER_DST_BIT);if(!made)return {};snapshot->pixels=std::move(made.Value());texture_pool_.push_back(snapshot);}
+ if(scale_>1&&snapshot->native.image==VK_NULL_HANDLE){if(!CreateImage(snapshot->native,ColorImageFormat,VK_IMAGE_USAGE_SAMPLED_BIT,VK_IMAGE_ASPECT_COLOR_BIT,width,height)){DestroyImage(snapshot->native);snapshot->native={};return {};}}
+ auto copied=context_->SubmitWithoutWaiting([&](VkCommandBuffer commands){
+  MakeDrawnVisibleToCopy(commands);VkImage image=source->images.color.image;
+  if(scale_>1){VkImageMemoryBarrier barrier{.sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};barrier.srcAccessMask=snapshot->initialized?VK_ACCESS_TRANSFER_READ_BIT:0;barrier.dstAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;barrier.oldLayout=snapshot->initialized?VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:VK_IMAGE_LAYOUT_UNDEFINED;barrier.newLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;barrier.srcQueueFamilyIndex=barrier.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;barrier.image=snapshot->native.image;barrier.subresourceRange={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1};vkCmdPipelineBarrier(commands,VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,VK_PIPELINE_STAGE_TRANSFER_BIT,0,0,nullptr,0,nullptr,1,&barrier);
+   VkImageBlit blit{};blit.srcSubresource=blit.dstSubresource={VK_IMAGE_ASPECT_COLOR_BIT,0,0,1};blit.srcOffsets[1]={static_cast<int>(width*scale_),static_cast<int>(height*scale_),1};blit.dstOffsets[1]={static_cast<int>(width),static_cast<int>(height),1};vkCmdBlitImage(commands,image,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,snapshot->native.image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,1,&blit,VK_FILTER_NEAREST);
+   barrier.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;barrier.dstAccessMask=VK_ACCESS_TRANSFER_READ_BIT;barrier.oldLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;barrier.newLayout=VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;vkCmdPipelineBarrier(commands,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_PIPELINE_STAGE_TRANSFER_BIT,0,0,nullptr,0,nullptr,1,&barrier);image=snapshot->native.image;
+  }
+  VkBufferImageCopy region{};region.imageSubresource={VK_IMAGE_ASPECT_COLOR_BIT,0,0,1};region.imageExtent={width,height,1};vkCmdCopyImageToBuffer(commands,image,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,snapshot->pixels->Buffer(),1,&region);
+  PipelineBarrier(commands,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_ACCESS_TRANSFER_WRITE_BIT,VK_ACCESS_TRANSFER_READ_BIT);
+ });
+ if(!copied)return {};snapshot->ticket=copied.Value();snapshot->initialized=scale_>1;snapshot->revision=source->color_revision;resident_snapshots_[source->resident_id]=snapshot;++resident_texture_copies_;return snapshot;
+}
+
+void VulkanGpuBackend::Implementation::TakeSnapshot(Part& part, const gpu::MemoryRange& range) {
+    const std::span<const std::uint8_t> bytes =
+        std::as_const(*memory_).Bytes(range.start, range.size);
+    part.snapshot.assign(bytes.begin(), bytes.end());
+}
+
+// Whether memory is not what the part last agreed with it on. Memory the GPU
+// cannot see is never said to have changed.
+bool VulkanGpuBackend::Implementation::MemoryChanged(const Part& part,
+                                                     const gpu::MemoryRange& range) const {
+    const std::span<const std::uint8_t> bytes =
+        std::as_const(*memory_).Bytes(range.start, range.size);
+    return !bytes.empty() && (part.snapshot.size() != bytes.size() ||
+                              std::memcmp(part.snapshot.data(), bytes.data(), bytes.size()) != 0);
+}
+
+core::Result<Slot*> VulkanGpuBackend::Implementation::SlotFor(const Target& target) {
+    for (const std::unique_ptr<Slot>& slot : slots_) {
+        if (slot->target == target) {
+            slot->used = ++clock_;
+            return slot.get();
+        }
+    }
+    if (slots_.size() >= MaxResidentTargets) {
+        const auto oldest = std::ranges::min_element(
+            slots_, [](const auto& a, const auto& b) { return a->used < b->used; });
+        if (const core::Status written = WriteBack(**oldest, true, true); !written) {
+            return written.Failure();
+        }
+        if (const core::Status idle = context_->Wait(context_->LastTicket()); !idle) {
+            return idle.Failure();
+        }
+        DestroyAttachments((*oldest)->images);
+        resident_snapshots_.erase((*oldest)->resident_id);
+        slots_.erase(oldest);
+    }
+    auto made = std::make_unique<Slot>();
+    made->target = target;
+    made->resident_id=++clock_;
+    made->used = ++clock_;
+    slots_.push_back(std::move(made));
+    Slot& slot = *slots_.back();
+    if (const core::Status created = CreateAttachments(slot.images, target.width * scale_, target.height * scale_);
+        !created) {
+        slots_.pop_back();
+        return created.Failure();
+    }
+    return &slot;
+}
+
+// The dirty parts asked for, converted from their images back into memory.
+core::Status VulkanGpuBackend::Implementation::WriteBack(Slot& slot, bool color, bool depth) {
+    color = color && slot.color.state == PartState::Dirty;
+    depth = depth && slot.depth.state == PartState::Dirty;
+    if (!color && !depth) {
+        return {};
+    }
+    const Target& target = slot.target;
+    const VkDeviceSize pixels = static_cast<VkDeviceSize>(target.width) * target.height * scale_ * scale_;
+    const VkDeviceSize color_size = pixels * 4;
+    const VkDeviceSize depth_size = pixels * 4;
+    const VkDeviceSize stencil_size = pixels;
+    const core::Result<HostBuffer*> staging =
+        Reserve(readback_, Scratch::Staging, color_size + depth_size + stencil_size);
+    if (!staging) {
+        return staging.Failure();
+    }
+    const VkExtent3D extent{.width = target.width * scale_, .height = target.height * scale_, .depth = 1};
+    const auto region = [&](VkDeviceSize offset, VkImageAspectFlags aspect) {
+        return VkBufferImageCopy{.bufferOffset = offset,
+                                 .bufferRowLength = 0,
+                                 .bufferImageHeight = 0,
+                                 .imageSubresource = {.aspectMask = aspect,
+                                                      .mipLevel = 0,
+                                                      .baseArrayLayer = 0,
+                                                      .layerCount = 1},
+                                 .imageOffset = {.x = 0, .y = 0, .z = 0},
+                                 .imageExtent = extent};
+    };
+    const VkBufferImageCopy color_region = region(0, VK_IMAGE_ASPECT_COLOR_BIT);
+    const std::array<VkBufferImageCopy, 2> depth_regions = {
+        region(color_size, VK_IMAGE_ASPECT_DEPTH_BIT),
+        region(color_size + depth_size, VK_IMAGE_ASPECT_STENCIL_BIT)};
+    VkBuffer staging_buffer = staging.Value()->Buffer();
+    std::optional<Stopwatch> waiting{times_.wait};
+    ++waits_;
+    const core::Result<Ticket> submitted =
+        context_->SubmitWithoutWaiting([&](VkCommandBuffer commands) {
+            MakeDrawnVisibleToCopy(commands);
+            if (color) {
+                vkCmdCopyImageToBuffer(commands,
+                                       slot.images.color.image,
+                                       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                       staging_buffer,
+                                       1,
+                                       &color_region);
+            }
+            if (depth) {
+                vkCmdCopyImageToBuffer(commands,
+                                       slot.images.depth.image,
+                                       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                       staging_buffer,
+                                       2,
+                                       depth_regions.data());
+            }
+            MakeCopyVisibleToHost(commands);
+        });
+    if (!submitted) {
+        return submitted.Failure();
+    }
+    const core::Status copied = context_->Wait(submitted.Value());
+    waiting.reset();
+    if (!copied) {
+        return copied;
+    }
+    const Stopwatch downloading{times_.download};
+    const std::span<std::uint8_t> stage = staging.Value()->Bytes();
+    if (color) {
+        DownloadColor(target, stage.first(color_size));
+        TakeSnapshot(slot.color, ColorRange(target));
+        slot.color.state = PartState::Clean;
+        downloaded_bytes_ += target.ColorBytes();
+    }
+    if (depth) {
+        DownloadDepth(target,
+                      stage.subspan(color_size, depth_size),
+                      stage.subspan(color_size + depth_size, stencil_size));
+        TakeSnapshot(slot.depth, DepthRange(target));
+        slot.depth.state = PartState::Clean;
+        downloaded_bytes_ += target.DepthBytes();
+    }
+    return {};
+}
+
+// The buffer kept for a use, as large as asked for. One that is too small is
+// made again, which is only done to a buffer whose last submission has
+// finished.
+core::Result<HostBuffer*> VulkanGpuBackend::Implementation::Reserve(
+    std::unique_ptr<HostBuffer>& kept, Scratch which, VkDeviceSize size) {
+    constexpr VkDeviceSize Smallest = 16;
+    size = std::max(size, Smallest);
+    if (kept && kept->Bytes().size() >= size) {
+        return kept.get();
+    }
+    VkBufferUsageFlags usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    HostUse use = HostUse::Write;
+    switch (which) {
+    case Scratch::Staging:
+        usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        use = HostUse::ReadBack;
+        break;
+    case Scratch::Vertices:
+    case Scratch::Inputs:
+        usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        break;
+    case Scratch::Words:
+    case Scratch::Texels:
+        usage|=VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        break;
+    }
+    const Stopwatch allocating{times_.allocate};
+    ++allocations_;
+    kept.reset();
+    auto made = HostBuffer::Create(*context_, size, usage, use);
+    if (!made) {
+        return made.Failure();
+    }
+    kept = std::move(made.Value());
+    return kept.get();
+}
+
+// Memory is made true over a range for whoever is about to read it.
+core::Status VulkanGpuBackend::Implementation::MakeTrue(const gpu::MemoryRange& range) {
+    if (const core::Status resolved = ResolveOutputs(range, false); !resolved) {
+        return resolved;
+    }
+    for (const std::unique_ptr<Slot>& slot : slots_) {
+        const bool color =
+            slot->color.state == PartState::Dirty && Overlaps(range, ColorRange(slot->target));
+        const bool depth =
+            slot->depth.state == PartState::Dirty && Overlaps(range, DepthRange(slot->target));
+        if (const core::Status written = WriteBack(*slot, color, depth); !written) {
+            return written;
+        }
+    }
+    return {};
+}
+
+// What the images hold over a range stops being the truth. A dirty part is
+// written back first, unless the range is overwritten whole and the bytes it
+// holds are about to be replaced.
+core::Status VulkanGpuBackend::Implementation::Forget(const gpu::MemoryRange& range,
+                                                      bool overwritten,
+                                                      const Slot* except) {
+    if (const core::Status resolved = ResolveOutputs(range, overwritten); !resolved) {
+        return resolved;
+    }
+    for (const std::unique_ptr<Slot>& slot : slots_) {
+        if (slot.get() == except) {
+            continue;
+        }
+        for (const bool color : {true, false}) {
+            Part& part = color ? slot->color : slot->depth;
+            const gpu::MemoryRange held =
+                color ? ColorRange(slot->target) : DepthRange(slot->target);
+            if (!Overlaps(range, held)) {
+                continue;
+            }
+            if (part.state == PartState::Dirty && !(overwritten && Covers(range, held))) {
+                if (const core::Status written = WriteBack(*slot, color, !color); !written) {
+                    return written;
+                }
+            }
+            part.state = PartState::Stale;
+        }
+    }
+    return {};
+}
+
+core::Status VulkanGpuBackend::Implementation::WriteBackAll() {
+    core::Status status = ResolveOutputs({.start = 0, .size = UINT32_MAX}, false);
+    for (const std::unique_ptr<Slot>& slot : slots_) {
+        if (const core::Status written = WriteBack(*slot, true, true); !written && status) {
+            status = written;
+        }
+    }
+    return status;
+}
+
+// ---------------------------------------------------------------------------
+// Display transfers on the device (ADR 0033).
+
+namespace {
+
+// GPU_MEMCOPY_FLAGS, as memory_transfer.cpp reads them. Source: GBATEK;
+// Azahar's DisplayTransferConfig.
+constexpr unsigned TransferFlip = 0;
+constexpr unsigned TransferInputLinear = 1;
+constexpr unsigned TransferTextureCopy = 3;
+constexpr unsigned TransferDontSwizzle = 5;
+constexpr unsigned TransferInputFormat = 8;
+constexpr unsigned TransferOutputFormat = 12;
+constexpr unsigned TransferScaling = 24;
+
+// A transfer's dimensions, in the halfwords of its size words, and the side of
+// the tiles the output has to be whole ones of for memory to take the same way.
+constexpr std::uint32_t HalfwordMask = 0xFFFF;
+constexpr unsigned HalfwordBits = 16;
+constexpr std::uint32_t TileSide = 8;
+// An RGB8 pixel in memory is blue, green, red; the image holds red, green,
+// blue, alpha. Source: EncodeAs<Rgb8> in pixel_formats.cpp.
+constexpr std::uint32_t Rgb8Bytes = 3;
+constexpr std::uint32_t ImagePixelBytes = 4;
+
+// The pixels of a transfer's output, from the buffer the device copied them
+// into, converted to what memory holds for RGB8.
+void ConvertToRgb8(const PendingTransfer& pending, std::span<std::uint8_t> output) {
+    const std::span<const std::uint8_t> pixels = pending.pixels->Bytes();
+    const std::size_t count = static_cast<std::size_t>(pending.width) * pending.height;
+    for (std::size_t pixel = 0; pixel < count; ++pixel) {
+        const auto x=static_cast<std::uint32_t>(pixel % pending.width),y=static_cast<std::uint32_t>(pixel / pending.width);
+        const auto source=(static_cast<std::size_t>(y*pending.scale+pending.scale/2)*pending.width*pending.scale+x*pending.scale+pending.scale/2)*ImagePixelBytes;
+        output[pixel*Rgb8Bytes]=pixels[source+2];output[pixel*Rgb8Bytes+1]=pixels[source+1];output[pixel*Rgb8Bytes+2]=pixels[source];
+    }
+}
+
+}  // namespace
+
+// The transfer, if it is the title's kind and the backend holds the target it
+// reads: RGBA8 in tiles to RGB8 in rows of whole tiles, no flip, no scale, the
+// output no larger than the target and read from a row of its tiles. Anything
+// else is for memory to do.
+std::optional<DeviceTransfer>
+VulkanGpuBackend::Implementation::Carries(const gpu::TransferConfig& transfer) {
+    const std::uint32_t flags = transfer.flags;
+    const bool plain =
+        Field(flags, TransferFlip, 1) == 0 && Field(flags, TransferInputLinear, 1) == 0 &&
+        Field(flags, TransferTextureCopy, 1) == 0 && Field(flags, TransferDontSwizzle, 1) == 0 &&
+        Field(flags, TransferScaling, 2) == 0;
+    if (!plain ||
+        gpu::TransferFormat(Field(flags, TransferInputFormat, 3)) != gpu::PixelFormat::Rgba8 ||
+        gpu::TransferFormat(Field(flags, TransferOutputFormat, 3)) != gpu::PixelFormat::Rgb8) {
+        return std::nullopt;
+    }
+    const std::uint32_t input_width = transfer.input_size & HalfwordMask;
+    const std::uint32_t width = transfer.output_size & HalfwordMask;
+    const std::uint32_t height = transfer.output_size >> HalfwordBits;
+    if (width == 0 || height == 0 || width % TileSide != 0 || height % TileSide != 0) {
+        return std::nullopt;
+    }
+    // The input starts on a row of tiles somewhere in a target's colour, which
+    // is where the title's screens are: the last rows of a taller target.
+    Slot* found = nullptr;
+    std::uint32_t first_row = 0;
+    for (const std::unique_ptr<Slot>& slot : slots_) {
+        const Target& target = slot->target;
+        const std::uint32_t tile_row_bytes = target.width * TileSide * ImagePixelBytes;
+        if (target.width != input_width || target.color_format != gpu::PixelFormat::Rgba8 ||
+            slot->color.state == PartState::Stale || width > target.width ||
+            transfer.input < target.color_address ||
+            (transfer.input - target.color_address) % tile_row_bytes != 0 ||
+            (found != nullptr && slot->used <= found->used)) {
+            continue;
+        }
+        const std::uint32_t row =
+            (transfer.input - target.color_address) / (target.width * ImagePixelBytes);
+        if (row + height <= target.height) {
+            found = slot.get();
+            first_row = row;
+        }
+    }
+    const auto size = static_cast<std::uint32_t>(width * height * Rgb8Bytes);
+    if (found == nullptr || memory_->Bytes(transfer.output, size).size() != size) {
+        return std::nullopt;
+    }
+    return DeviceTransfer{.slot = found,
+                          .first_row = first_row,
+                          .width = width,
+                          .height = height,
+                          .output = {.start = transfer.output, .size = size}};
+}
+
+// A record for a transfer, from those that are done with or new, holding a
+// buffer for this many bytes.
+core::Result<PendingTransfer>
+VulkanGpuBackend::Implementation::TakePending(VkDeviceSize pixel_bytes) {
+    PendingTransfer pending;
+    const auto spare = std::ranges::find_if(
+        spare_, [&](const PendingTransfer& one) { return context_->Finished(one.ticket); });
+    if (spare != spare_.end()) {
+        pending = std::move(*spare);
+        spare_.erase(spare);
+    }
+    if (!pending.pixels || pending.pixels->Bytes().size() < pixel_bytes) {
+        const Stopwatch allocating{times_.allocate};
+        ++allocations_;
+        pending.pixels.reset();
+        auto made = HostBuffer::Create(
+            *context_, pixel_bytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT, HostUse::ReadBack);
+        if (!made) {
+            return made.Failure();
+        }
+        pending.pixels = std::move(made.Value());
+    }
+    return pending;
+}
+
+core::Result<bool>
+VulkanGpuBackend::Implementation::RunDisplayTransfer(const gpu::TransferConfig& transfer) {
+    const std::optional<DeviceTransfer> shape = Carries(transfer);
+    if (!shape) {
+        return false;
+    }
+    Slot& slot = *shape->slot;
+    screen_copies_.erase(shape->output.start);
+    slot.used = ++clock_;
+    // What is already in the output's place, or about to be written there by an
+    // earlier transfer, is replaced.
+    if (const core::Status forgotten = Forget(shape->output, true, nullptr); !forgotten) {
+        return forgotten.Failure();
+    }
+    core::Result<PendingTransfer> taken =
+        TakePending(static_cast<VkDeviceSize>(shape->width) * shape->height * ImagePixelBytes * scale_ * scale_);
+    if (!taken) {
+        return taken.Failure();
+    }
+    PendingTransfer& pending = taken.Value();
+    pending.range = shape->output;
+    pending.width = shape->width;
+    pending.height = shape->height;
+    pending.scale = scale_;
+    const std::span<const std::uint8_t> memory =
+        std::as_const(*memory_).Bytes(shape->output.start, shape->output.size);
+    pending.before.assign(memory.begin(), memory.end());
+
+    const VkBufferImageCopy region{
+        .bufferOffset = 0,
+        .bufferRowLength = 0,
+        .bufferImageHeight = 0,
+        .imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                             .mipLevel = 0,
+                             .baseArrayLayer = 0,
+                             .layerCount = 1},
+        .imageOffset = {.x = 0, .y = static_cast<std::int32_t>(shape->first_row * scale_), .z = 0},
+        .imageExtent = {.width = shape->width * scale_, .height = shape->height * scale_, .depth = 1}};
+    const core::Result<Ticket> submitted =
+        context_->SubmitWithoutWaiting([&](VkCommandBuffer commands) {
+            MakeDrawnVisibleToCopy(commands);
+            vkCmdCopyImageToBuffer(commands,
+                                   slot.images.color.image,
+                                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                   pending.pixels->Buffer(),
+                                   1,
+                                   &region);
+            MakeCopyVisibleToHost(commands);
+        });
+    if (!submitted) {
+        return submitted.Failure();
+    }
+    pending.ticket = submitted.Value();
+    outputs_.push_back(std::move(pending));
+    ++transfers_;
+    return true;
+}
+
+// The output reaches memory where memory is still what it was when the
+// transfer was made. Where someone wrote since, that is the later of the two
+// and stays, and counts as a write nobody announced.
+core::Status VulkanGpuBackend::Implementation::Resolve(PendingTransfer& pending) {
+    if (!context_->Finished(pending.ticket)) {
+        const Stopwatch waiting{times_.wait};
+        ++waits_;
+        if (const core::Status finished = context_->Wait(pending.ticket); !finished) {
+            return finished;
+        }
+    }
+    const Stopwatch downloading{times_.download};
+    const std::span<std::uint8_t> memory = memory_->Bytes(pending.range.start, pending.range.size);
+    if (memory.size() != pending.range.size) {
+        return {};
+    }
+    if (std::memcmp(memory.data(), pending.before.data(), memory.size()) == 0) {
+        ConvertToRgb8(pending, memory);
+        if(pending.scale>1){
+            ScreenCopy copy;
+            copy.picture=RotateRenderFramebuffer(pending.pixels->Bytes(),pending.width*pending.scale,pending.height*pending.scale);
+            copy.native.assign(memory.begin(),memory.end());
+            screen_copies_[pending.range.start]=std::move(copy);
+            if(screen_copies_.size()>8)screen_copies_.erase(screen_copies_.begin());
+        }
+        return {};
+    }
+    ++conflicts_;
+    std::vector<std::uint8_t> converted(memory.size());
+    ConvertToRgb8(pending, converted);
+    for (std::size_t at = 0; at < memory.size(); ++at) {
+        if (memory[at] == pending.before[at]) {
+            memory[at] = converted[at];
+        }
+    }
+    return {};
+}
+
+// Makes memory true over a range for the transfers that write in it, or
+// drops those the range overwrites whole when asked to.
+core::Status VulkanGpuBackend::Implementation::ResolveOutputs(const gpu::MemoryRange& range,
+                                                              bool drop_covered) {
+    for (auto pending = outputs_.begin(); pending != outputs_.end();) {
+        if (!Overlaps(range, pending->range)) {
+            ++pending;
+            continue;
+        }
+        if (!(drop_covered && Covers(range, pending->range))) {
+            if (const core::Status resolved = Resolve(*pending); !resolved) {
+                return resolved;
+            }
+        }
+        spare_.push_back(std::move(*pending));
+        pending = outputs_.erase(pending);
+    }
+    return {};
+}
+
+core::Status VulkanGpuBackend::Implementation::DrawGroup(std::size_t first, std::size_t end) {
+    const Target target = pending_[first].target;
+    ++groups_;
+    const core::Result<Slot*> found = SlotFor(target);
+    if (!found) {
+        return found.Failure();
+    }
+    Slot& slot = *found.Value();
+    const gpu::MemoryRange color_range = ColorRange(target);
+    const gpu::MemoryRange depth_range = DepthRange(target);
+
+    // A part whose memory someone changed without saying so is taken from
+    // memory again, as a dirty one is counted as a conflict (ADR 0030).
+    for (const bool color : {true, false}) {
+        Part& part = color ? slot.color : slot.depth;
+        if (part.state != PartState::Stale &&
+            MemoryChanged(part, color ? color_range : depth_range)) {
+            conflicts_ += part.state == PartState::Dirty ? 1 : 0;
+            part.state = PartState::Stale;
+        }
+    }
+    const bool upload_color = slot.color.state == PartState::Stale;
+    const bool upload_depth = slot.depth.state == PartState::Stale;
+    if (upload_color) {
+        if (const core::Status made = MakeTrue(color_range); !made) {
+            return made;
+        }
+    }
+    if (upload_depth) {
+        if (const core::Status made = MakeTrue(depth_range); !made) {
+            return made;
+        }
+    }
+    // The draws change the memory under any other target that lies over this.
+    for (const gpu::MemoryRange& range : {color_range, depth_range}) {
+        if (const core::Status forgotten = Forget(range, false, &slot); !forgotten) {
+            return forgotten;
+        }
+    }
+
+    const VkDeviceSize pixels = static_cast<VkDeviceSize>(target.width) * target.height * scale_ * scale_;
+    const VkDeviceSize color_size = pixels * 4;
+    const VkDeviceSize depth_size = pixels * 4;
+    const VkDeviceSize stencil_size = pixels;
+    // The next frame of the ring is free once the group that last used it has
+    // finished; that is the only time a list waits for the device.
+    Frame& frame = frames_.at(next_frame_);
+    next_frame_ = (next_frame_ + 1) % FramesInFlight;
+    if (frame.ticket != 0 && !context_->Finished(frame.ticket)) {
+        const Stopwatch waiting{times_.wait};
+        ++waits_;
+        if (const core::Status finished = context_->Wait(frame.ticket); !finished) {
+            return finished;
+        }
+    }
+    frame.ticket = 0;
+    frame.textures.clear();
+    for(const auto& copy:texture_copies_)frame.textures.push_back(copy.snapshot);
+    const auto reserve = [&](Scratch which, VkDeviceSize size) {
+        return Reserve(frame.buffers.at(static_cast<std::size_t>(which)), which, size);
+    };
+    const core::Result<HostBuffer*> staging =
+        reserve(Scratch::Staging, color_size + depth_size + stencil_size);
+    const core::Result<HostBuffer*> vertices =
+        reserve(Scratch::Vertices, vertex_data_.size() * sizeof(float));
+    const core::Result<HostBuffer*> words = reserve(Scratch::Words, draw_words_.size() * 4);
+    const core::Result<HostBuffer*> texels = reserve(Scratch::Texels, texels_.size() * 4);
+    const core::Result<HostBuffer*> inputs =
+        reserve(Scratch::Inputs, input_data_.size() * sizeof(float));
+    for (const auto* buffer : {&staging, &vertices, &inputs, &words, &texels}) {
+        if (!*buffer) {
+            return buffer->Failure();
+        }
+    }
+    const std::span<std::uint8_t> stage = staging.Value()->Bytes();
+    {
+        const Stopwatch uploading{times_.upload};
+        if (upload_color) {
+            UploadColor(target, stage.first(color_size));
+            TakeSnapshot(slot.color, color_range);
+            uploaded_bytes_ += target.ColorBytes();
+        }
+        if (upload_depth) {
+            UploadDepth(target,
+                        stage.subspan(color_size, depth_size),
+                        stage.subspan(color_size + depth_size, stencil_size));
+            TakeSnapshot(slot.depth, depth_range);
+            uploaded_bytes_ += target.DepthBytes();
+        }
+    }
+    std::memcpy(
+        vertices.Value()->Bytes().data(), vertex_data_.data(), vertex_data_.size() * sizeof(float));
+    std::memcpy(
+        inputs.Value()->Bytes().data(), input_data_.data(), input_data_.size() * sizeof(float));
+    std::memcpy(words.Value()->Bytes().data(), draw_words_.data(), draw_words_.size() * 4);
+    std::memcpy(texels.Value()->Bytes().data(), texels_.data(), texels_.size() * 4);
+
+    const std::array<VkDescriptorBufferInfo, 2> infos = {
+        VkDescriptorBufferInfo{
+            .buffer = words.Value()->Buffer(), .offset = 0, .range = VK_WHOLE_SIZE},
+        VkDescriptorBufferInfo{
+            .buffer = texels.Value()->Buffer(), .offset = 0, .range = VK_WHOLE_SIZE}};
+    std::array<VkWriteDescriptorSet, 2> writes{};
+    for (std::uint32_t binding = 0; binding < 2; ++binding) {
+        writes.at(binding).sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes.at(binding).dstSet = frame.set;
+        writes.at(binding).dstBinding = binding;
+        writes.at(binding).descriptorCount = 1;
+        writes.at(binding).descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        writes.at(binding).pBufferInfo = &infos.at(binding);
+    }
+    vkUpdateDescriptorSets(device_, 2, writes.data(), 0, nullptr);
+
+    std::vector<VkPipeline> pipelines;
+    for (std::size_t at = first; at < end; ++at) {
+        const core::Result<VkPipeline> pipeline = Pipeline(pending_[at].key);
+        if (!pipeline) {
+            return pipeline.Failure();
+        }
+        pipelines.push_back(pipeline.Value());
+    }
+
+    Attachments& images = slot.images;
+    VkBuffer staging_buffer = staging.Value()->Buffer();
+    VkBuffer vertex_buffer = vertices.Value()->Buffer();
+    VkBuffer input_buffer = inputs.Value()->Buffer();
+    const core::Result<Ticket> drawn =
+        context_->SubmitWithoutWaiting([&](VkCommandBuffer commands) {
+            for(const auto& copy:texture_copies_){VkBufferCopy region{.srcOffset=0,.dstOffset=static_cast<VkDeviceSize>(copy.offset)*4,.size=static_cast<VkDeviceSize>(copy.snapshot->width)*copy.snapshot->height*4};vkCmdCopyBuffer(commands,copy.snapshot->pixels->Buffer(),texels.Value()->Buffer(),1,&region);}
+            if(!texture_copies_.empty())PipelineBarrier(commands,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,VK_ACCESS_TRANSFER_WRITE_BIT,VK_ACCESS_SHADER_READ_BIT);
+            const auto barrier = [&](VkImage image,
+                                     VkImageAspectFlags aspect,
+                                     VkImageLayout from,
+                                     VkImageLayout to,
+                                     VkAccessFlags source,
+                                     VkAccessFlags destination) {
+                VkImageMemoryBarrier change{};
+                change.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                change.srcAccessMask = source;
+                change.dstAccessMask = destination;
+                change.oldLayout = from;
+                change.newLayout = to;
+                change.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                change.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                change.image = image;
+                change.subresourceRange = {.aspectMask = aspect,
+                                           .baseMipLevel = 0,
+                                           .levelCount = 1,
+                                           .baseArrayLayer = 0,
+                                           .layerCount = 1};
+                vkCmdPipelineBarrier(commands,
+                                     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                     VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                     0,
+                                     0,
+                                     nullptr,
+                                     0,
+                                     nullptr,
+                                     1,
+                                     &change);
+            };
+            constexpr VkImageAspectFlags DepthStencil =
+                VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+            constexpr VkAccessFlags ColorUse =
+                VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            constexpr VkAccessFlags DepthUse = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                                               VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            const VkExtent3D extent{.width = target.width * scale_, .height = target.height * scale_, .depth = 1};
+            const auto region = [&](VkDeviceSize offset, VkImageAspectFlags aspect) {
+                return VkBufferImageCopy{.bufferOffset = offset,
+                                         .bufferRowLength = 0,
+                                         .bufferImageHeight = 0,
+                                         .imageSubresource = {.aspectMask = aspect,
+                                                              .mipLevel = 0,
+                                                              .baseArrayLayer = 0,
+                                                              .layerCount = 1},
+                                         .imageOffset = {.x = 0, .y = 0, .z = 0},
+                                         .imageExtent = extent};
+            };
+            // A part taken from memory is copied in; one that was kept comes from
+            // the layout the last pass left it in. Either way it ends as an
+            // attachment.
+            if (upload_color) {
+                const VkBufferImageCopy color_region = region(0, VK_IMAGE_ASPECT_COLOR_BIT);
+                barrier(images.color.image,
+                        VK_IMAGE_ASPECT_COLOR_BIT,
+                        VK_IMAGE_LAYOUT_UNDEFINED,
+                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                        ColorUse,
+                        VK_ACCESS_TRANSFER_WRITE_BIT);
+                vkCmdCopyBufferToImage(commands,
+                                       staging_buffer,
+                                       images.color.image,
+                                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                       1,
+                                       &color_region);
+                barrier(images.color.image,
+                        VK_IMAGE_ASPECT_COLOR_BIT,
+                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                        VK_ACCESS_TRANSFER_WRITE_BIT,
+                        ColorUse);
+            } else {
+                barrier(images.color.image,
+                        VK_IMAGE_ASPECT_COLOR_BIT,
+                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                        ColorUse,
+                        ColorUse);
+            }
+            if (upload_depth) {
+                const std::array<VkBufferImageCopy, 2> depth_regions = {
+                    region(color_size, VK_IMAGE_ASPECT_DEPTH_BIT),
+                    region(color_size + depth_size, VK_IMAGE_ASPECT_STENCIL_BIT)};
+                barrier(images.depth.image,
+                        DepthStencil,
+                        VK_IMAGE_LAYOUT_UNDEFINED,
+                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                        DepthUse,
+                        VK_ACCESS_TRANSFER_WRITE_BIT);
+                vkCmdCopyBufferToImage(commands,
+                                       staging_buffer,
+                                       images.depth.image,
+                                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                       2,
+                                       depth_regions.data());
+                barrier(images.depth.image,
+                        DepthStencil,
+                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                        VK_ACCESS_TRANSFER_WRITE_BIT,
+                        DepthUse);
+            } else {
+                barrier(images.depth.image,
+                        DepthStencil,
+                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                        DepthUse,
+                        DepthUse);
+            }
+
+            VkRenderPassBeginInfo begin{};
+            begin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            begin.renderPass = render_pass_;
+            begin.framebuffer = images.framebuffer;
+            begin.renderArea = {.offset = {.x = 0, .y = 0},
+                                .extent = {.width = target.width * scale_, .height = target.height * scale_}};
+            vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
+            vkCmdBindDescriptorSets(commands,
+                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    pipeline_layout_,
+                                    0,
+                                    1,
+                                    &frame.set,
+                                    0,
+                                    nullptr);
+            const VkDeviceSize no_offset = 0;
+            const VkRect2D scissor{.offset = {.x = 0, .y = 0},
+                                   .extent = {.width = target.width * scale_, .height = target.height * scale_}};
+            vkCmdSetScissor(commands,0,1,&scissor);
+            VkPipeline bound_pipeline=VK_NULL_HANDLE;
+            bool vertex_bound=false,inputs_bound=false;
+            for (std::size_t at = first; at < end; ++at) {
+                const PendingDraw& draw = pending_[at];
+                const auto pipeline=pipelines.at(at-first);
+                if(bound_pipeline!=pipeline){vkCmdBindPipeline(commands,VK_PIPELINE_BIND_POINT_GRAPHICS,pipeline);bound_pipeline=pipeline;}
+                if(!vertex_bound||inputs_bound!=draw.shaded_on_gpu){
+                    vkCmdBindVertexBuffers(commands,0,1,draw.shaded_on_gpu?&input_buffer:&vertex_buffer,&no_offset);
+                    vertex_bound=true;inputs_bound=draw.shaded_on_gpu;
+                }
+                VkViewport scaled_viewport=draw.viewport;
+                scaled_viewport.x*=scale_;scaled_viewport.y*=scale_;
+                scaled_viewport.width*=scale_;scaled_viewport.height*=scale_;
+                vkCmdSetViewport(commands, 0, 1, &scaled_viewport);
+                const auto* previous=at==first?nullptr:&pending_[at-1];
+                if(!previous||previous->blend_constants!=draw.blend_constants)vkCmdSetBlendConstants(commands,draw.blend_constants.data());
+                if(!previous||previous->stencil_compare_mask!=draw.stencil_compare_mask)vkCmdSetStencilCompareMask(commands,VK_STENCIL_FACE_FRONT_AND_BACK,draw.stencil_compare_mask);
+                if(!previous||previous->stencil_write_mask!=draw.stencil_write_mask)vkCmdSetStencilWriteMask(commands,VK_STENCIL_FACE_FRONT_AND_BACK,draw.stencil_write_mask);
+                if(!previous||previous->stencil_reference!=draw.stencil_reference)vkCmdSetStencilReference(commands,VK_STENCIL_FACE_FRONT_AND_BACK,draw.stencil_reference);
+                vkCmdPushConstants(commands,
+                                   pipeline_layout_,
+                                   VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                                   0,
+                                   sizeof(PushConstants),
+                                   &draw.push);
+                vkCmdDraw(commands, draw.vertices, 1, draw.first_vertex, 0);
+            }
+            vkCmdEndRenderPass(commands);
+        });
+    if (!drawn) {
+        return drawn.Failure();
+    }
+    frame.ticket = drawn.Value();
+    ++slot.color_revision;
+    slot.color.state = PartState::Dirty;
+    slot.depth.state = PartState::Dirty;
+    return {};
+}
+
+// The buffers' pixels from memory into rows top first, as Vulkan's images
+// hold them: colour as RGBA8, depth as a float of the stored integer over the
+// largest, stencil as bytes. A buffer outside memory reads as zero.
+void VulkanGpuBackend::Implementation::UploadColorNative(const Target& target,
+                                                   std::span<std::uint8_t> color) const {
+    const std::size_t color_bytes = gpu::BytesPerPixel(target.color_format);
+    const std::span<const std::uint8_t> colors =
+        memory_->Bytes(target.color_address, target.ColorBytes());
+    if (IsOnePixelRepeated(colors, color_bytes)) {
+        const gpu::Color value = gpu::DecodePixel(target.color_format, colors.first(color_bytes));
+        for (std::size_t pixel = 0; pixel < static_cast<std::size_t>(target.width) * target.height;
+             ++pixel) {
+            color[pixel * 4] = value.red;
+            color[(pixel * 4) + 1] = value.green;
+            color[(pixel * 4) + 2] = value.blue;
+            color[(pixel * 4) + 3] = value.alpha;
+        }
+        return;
+    }
+    // Memory the GPU cannot see, or a size that is not whole tiles, is black.
+    if (colors.empty() ||
+        !gpu::DecodeTiledImage(target.color_format, target.width, target.height, colors, color)) {
+        std::ranges::fill(color, 0);
+    }
+}
+
+void VulkanGpuBackend::Implementation::UploadDepthNative(const Target& target,
+                                                   std::span<std::uint8_t> depth,
+                                                   std::span<std::uint8_t> stencil) const {
+    const std::size_t depth_bytes = gpu::BytesPerPixel(target.depth_format);
+    const std::span<const std::uint8_t> depths =
+        memory_->Bytes(target.depth_address, target.DepthBytes());
+    const auto maximum = static_cast<float>(gpu::MaximumDepth(target.depth_format));
+    if (IsOnePixelRepeated(depths, depth_bytes)) {
+        const std::span<const std::uint8_t> stored = depths.first(depth_bytes);
+        const float stored_depth =
+            static_cast<float>(gpu::DecodeDepth(target.depth_format, stored)) / maximum;
+        const std::uint8_t stored_stencil =
+            target.depth_format == gpu::DepthFormat::D24S8 ? gpu::DecodeStencil(stored) : 0;
+        for (std::size_t pixel = 0; pixel < static_cast<std::size_t>(target.width) * target.height;
+             ++pixel) {
+            std::memcpy(&depth[pixel * 4], &stored_depth, sizeof(float));
+            stencil[pixel] = stored_stencil;
+        }
+        return;
+    }
+    for (std::uint32_t y = 0; y < target.height; ++y) {
+        for (std::uint32_t x = 0; x < target.width; ++x) {
+            const std::size_t pixel = (static_cast<std::size_t>(y) * target.width) + x;
+            float stored_depth = 0.0F;
+            std::uint8_t stored_stencil = 0;
+            if (!depths.empty()) {
+                const std::span<const std::uint8_t> stored =
+                    depths.subspan(gpu::TiledOffset(x, y, target.width, depth_bytes), depth_bytes);
+                stored_depth =
+                    static_cast<float>(gpu::DecodeDepth(target.depth_format, stored)) / maximum;
+                if (target.depth_format == gpu::DepthFormat::D24S8) {
+                    stored_stencil = gpu::DecodeStencil(stored);
+                }
+            }
+            std::memcpy(&depth[pixel * 4], &stored_depth, sizeof(float));
+            stencil[pixel] = stored_stencil;
+        }
+    }
+}
+
+// And back: colour encoded in the buffer's format, depth rounded to the
+// nearest integer the format holds.
+void VulkanGpuBackend::Implementation::DownloadColorNative(const Target& target,
+                                                     std::span<const std::uint8_t> color) const {
+    const std::span<std::uint8_t> colors =
+        memory_->Bytes(target.color_address, target.ColorBytes());
+    if (colors.empty()) {
+        return;
+    }
+    static_cast<void>(
+        gpu::EncodeTiledImage(target.color_format, target.width, target.height, color, colors));
+}
+
+void VulkanGpuBackend::Implementation::DownloadDepthNative(const Target& target,
+                                                     std::span<const std::uint8_t> depth,
+                                                     std::span<const std::uint8_t> stencil) const {
+    const std::size_t depth_bytes = gpu::BytesPerPixel(target.depth_format);
+    const std::span<std::uint8_t> depths =
+        memory_->Bytes(target.depth_address, target.DepthBytes());
+    if (depths.empty()) {
+        return;
+    }
+    const auto maximum = static_cast<double>(gpu::MaximumDepth(target.depth_format));
+    for (std::uint32_t y = 0; y < target.height; ++y) {
+        for (std::uint32_t x = 0; x < target.width; ++x) {
+            const std::size_t pixel = (static_cast<std::size_t>(y) * target.width) + x;
+            float stored = 0.0F;
+            std::memcpy(&stored, &depth[pixel * 4], sizeof(float));
+            const std::span<std::uint8_t> target_bytes =
+                depths.subspan(gpu::TiledOffset(x, y, target.width, depth_bytes), depth_bytes);
+            gpu::EncodeDepth(
+                target.depth_format,
+                static_cast<std::uint32_t>(std::lround(static_cast<double>(stored) * maximum)),
+                target_bytes);
+            if (target.depth_format == gpu::DepthFormat::D24S8) {
+                gpu::EncodeStencil(stencil[pixel], target_bytes);
+            }
+        }
+    }
+}
+
+void VulkanGpuBackend::Implementation::UploadColor(const Target&t,std::span<std::uint8_t> out)const{
+ if(scale_==1){UploadColorNative(t,out);return;}
+ color_upload_.resize(static_cast<std::size_t>(t.width)*t.height*4);UploadColorNative(t,color_upload_);
+ ExpandRenderPixelsInto(color_upload_,out,t.width,t.height,4,scale_);
+}
+void VulkanGpuBackend::Implementation::UploadDepth(const Target&t,std::span<std::uint8_t>d,std::span<std::uint8_t>s)const{
+ if(scale_==1){UploadDepthNative(t,d,s);return;}
+ depth_upload_.resize(static_cast<std::size_t>(t.width)*t.height*4);stencil_upload_.resize(static_cast<std::size_t>(t.width)*t.height);UploadDepthNative(t,depth_upload_,stencil_upload_);
+ ExpandRenderPixelsInto(depth_upload_,d,t.width,t.height,4,scale_);ExpandRenderPixelsInto(stencil_upload_,s,t.width,t.height,1,scale_);
+}
+void VulkanGpuBackend::Implementation::DownloadColor(const Target&t,std::span<const std::uint8_t> data)const{
+ if(scale_==1){DownloadColorNative(t,data);return;}
+ auto reduced=ReduceRenderPixels(data,t.width,t.height,4,scale_);DownloadColorNative(t,reduced);
+}
+void VulkanGpuBackend::Implementation::DownloadDepth(const Target&t,std::span<const std::uint8_t>d,std::span<const std::uint8_t>s)const{
+ if(scale_==1){DownloadDepthNative(t,d,s);return;}
+ auto rd=ReduceRenderPixels(d,t.width,t.height,4,scale_),rs=ReduceRenderPixels(s,t.width,t.height,1,scale_);DownloadDepthNative(t,rd,rs);
+}
+
+core::Status VulkanGpuBackend::Implementation::Initialise() {
+    if(scale_<1 || scale_>3)return core::Error{"Internal resolution scale must be 1, 2 or 3"};
+    if (!context_->CanDraw()) {
+        return core::Error{
+            std::format("{} lacks logic operations or clip distances", context_->DeviceName())};
+    }
+    for (const auto& step : {&Implementation::CreateLayouts,
+                             &Implementation::CreateRenderPass,
+                             &Implementation::CreateShaders}) {
+        if (const core::Status status = (this->*step)(); !status) {
+            return status;
+        }
+    }
+    return {};
+}
+
+core::Status VulkanGpuBackend::Implementation::CreateLayouts() {
+    std::array<VkDescriptorSetLayoutBinding, 2> bindings{};
+    for (std::uint32_t binding = 0; binding < 2; ++binding) {
+        bindings.at(binding).binding = binding;
+        bindings.at(binding).descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        bindings.at(binding).descriptorCount = 1;
+        bindings.at(binding).stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    }
+    VkDescriptorSetLayoutCreateInfo set{};
+    set.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    set.bindingCount = 2;
+    set.pBindings = bindings.data();
+    if (const core::Status made =
+            Check(vkCreateDescriptorSetLayout(device_, &set, nullptr, &set_layout_),
+                  "vkCreateDescriptorSetLayout");
+        !made) {
+        return made;
+    }
+    const VkPushConstantRange push{.stageFlags =
+                                       VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                                   .offset = 0,
+                                   .size = sizeof(PushConstants)};
+    VkPipelineLayoutCreateInfo layout{};
+    layout.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    layout.setLayoutCount = 1;
+    layout.pSetLayouts = &set_layout_;
+    layout.pushConstantRangeCount = 1;
+    layout.pPushConstantRanges = &push;
+    if (const core::Status made =
+            Check(vkCreatePipelineLayout(device_, &layout, nullptr, &pipeline_layout_),
+                  "vkCreatePipelineLayout");
+        !made) {
+        return made;
+    }
+    const VkDescriptorPoolSize size{.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                    .descriptorCount = 2 * FramesInFlight};
+    VkDescriptorPoolCreateInfo pool{};
+    pool.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool.maxSets = FramesInFlight;
+    pool.poolSizeCount = 1;
+    pool.pPoolSizes = &size;
+    if (const core::Status made =
+            Check(vkCreateDescriptorPool(device_, &pool, nullptr, &descriptor_pool_),
+                  "vkCreateDescriptorPool");
+        !made) {
+        return made;
+    }
+    VkDescriptorSetAllocateInfo allocate{};
+    allocate.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocate.descriptorPool = descriptor_pool_;
+    allocate.descriptorSetCount = FramesInFlight;
+    const std::array<VkDescriptorSetLayout, FramesInFlight> layouts = {
+        set_layout_, set_layout_, set_layout_, set_layout_};
+    allocate.pSetLayouts = layouts.data();
+    std::array<VkDescriptorSet, FramesInFlight> sets{};
+    if (const core::Status made = Check(vkAllocateDescriptorSets(device_, &allocate, sets.data()),
+                                        "vkAllocateDescriptorSets");
+        !made) {
+        return made;
+    }
+    for (std::size_t at = 0; at < FramesInFlight; ++at) {
+        frames_.at(at).set = sets.at(at);
+    }
+    return {};
+}
+
+// One render pass for every draw: the buffers loaded as memory had them and
+// left for copying back.
+core::Status VulkanGpuBackend::Implementation::CreateRenderPass() {
+    const VkAttachmentDescription color_attachment{
+        .flags = 0,
+        .format = ColorImageFormat,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL};
+    const VkAttachmentDescription depth_attachment{
+        .flags = 0,
+        .format = DepthImageFormat,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        .finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL};
+    const std::array<VkAttachmentDescription, 2> attachments = {color_attachment, depth_attachment};
+    const VkAttachmentReference color{.attachment = 0,
+                                      .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+    const VkAttachmentReference depth{.attachment = 1,
+                                      .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+    VkSubpassDescription subpass{};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &color;
+    subpass.pDepthStencilAttachment = &depth;
+    VkRenderPassCreateInfo create{};
+    create.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    create.attachmentCount = 2;
+    create.pAttachments = attachments.data();
+    create.subpassCount = 1;
+    create.pSubpasses = &subpass;
+    return Check(vkCreateRenderPass(device_, &create, nullptr, &render_pass_),
+                 "vkCreateRenderPass");
+}
+
+core::Status VulkanGpuBackend::Implementation::CreateShaders() {
+    const std::string preamble = "#version 450\n" + FloatControlLines(context_->Floats()) +
+                                 std::string{CommonSource} + std::string{MultiplySource};
+    const core::Result<std::vector<std::uint32_t>> vertex =
+        CompileGlsl(preamble + std::string{VertexOutputSource} + std::string{VertexShaderSource},
+                    ShaderStage::Vertex);
+    if (!vertex) {
+        return vertex.Failure();
+    }
+    const core::Result<std::vector<std::uint32_t>> fragment =
+        CompileGlsl(preamble + std::string{FragmentShaderSource}, ShaderStage::Fragment);
+    if (!fragment) {
+        return fragment.Failure();
+    }
+    for (const auto& [code, module] : {std::pair{&vertex.Value(), &vertex_module_},
+                                       std::pair{&fragment.Value(), &fragment_module_}}) {
+        VkShaderModuleCreateInfo create{};
+        create.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        create.codeSize = code->size() * sizeof(std::uint32_t);
+        create.pCode = code->data();
+        if (const core::Status made = Check(vkCreateShaderModule(device_, &create, nullptr, module),
+                                            "vkCreateShaderModule");
+            !made) {
+            return made;
+        }
+    }
+    return {};
+}
+
+// A pipeline for one combination of the output merger's settings.
+core::Result<VkPipeline> VulkanGpuBackend::Implementation::BuildPipeline(
+    const PipelineKey& key, VkShaderModule vertex, VkShaderModule fragment) const {
+    const auto& w = key.words;
+    const std::uint32_t cull = w[0];
+    const std::uint32_t operation = w[1];
+    const std::uint32_t blend = w[2];
+    const std::uint32_t stencil_test = w[5];
+    const std::uint32_t stencil_operation = w[6];
+    const std::uint32_t mask = w[7];
+    const bool color_writes = w[8] != 0;
+    const bool depth_writes = w[9] != 0;
+    const bool has_stencil = w[10] == static_cast<std::uint32_t>(gpu::DepthFormat::D24S8);
+
+    const std::array<VkPipelineShaderStageCreateInfo, 2> stages = {
+        VkPipelineShaderStageCreateInfo{.sType =
+                                            VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                                        .pNext = nullptr,
+                                        .flags = 0,
+                                        .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                                        .module = vertex,
+                                        .pName = "main",
+                                        .pSpecializationInfo = nullptr},
+        VkPipelineShaderStageCreateInfo{.sType =
+                                            VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                                        .pNext = nullptr,
+                                        .flags = 0,
+                                        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                                        .module = fragment,
+                                        .pName = "main",
+                                        .pSpecializationInfo = nullptr}};
+    // Vertices shaded on the CPU come as their 24 slots, those the GPU
+    // shades as their 16 input registers; four floats to a location.
+    const std::size_t floats = key.program == 0 ? VertexFloats : InputFloats;
+    const VkVertexInputBindingDescription binding{
+        .binding = 0,
+        .stride = static_cast<std::uint32_t>(floats * sizeof(float)),
+        .inputRate = VK_VERTEX_INPUT_RATE_VERTEX};
+    std::vector<VkVertexInputAttributeDescription> attributes(floats / 4);
+    for (std::uint32_t location = 0; location < attributes.size(); ++location) {
+        attributes.at(location) = {.location = location,
+                                   .binding = 0,
+                                   .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+                                   .offset =
+                                       location * 4 * static_cast<std::uint32_t>(sizeof(float))};
+    }
+    VkPipelineVertexInputStateCreateInfo input{};
+    input.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    input.vertexBindingDescriptionCount = 1;
+    input.pVertexBindingDescriptions = &binding;
+    input.vertexAttributeDescriptionCount = static_cast<std::uint32_t>(attributes.size());
+    input.pVertexAttributeDescriptions = attributes.data();
+    VkPipelineInputAssemblyStateCreateInfo assembly{};
+    assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    VkPipelineViewportStateCreateInfo viewport{};
+    viewport.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewport.viewportCount = 1;
+    viewport.scissorCount = 1;
+    VkPipelineRasterizationStateCreateInfo raster{};
+    raster.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    raster.polygonMode = VK_POLYGON_MODE_FILL;
+    raster.cullMode = CullMode(cull);
+    raster.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    raster.lineWidth = 1.0F;
+    const VkPipelineMultisampleStateCreateInfo multisample{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+        .sampleShadingEnable = VK_FALSE,
+        .minSampleShading = 0.0F,
+        .pSampleMask = nullptr,
+        .alphaToCoverageEnable = VK_FALSE,
+        .alphaToOneEnable = VK_FALSE};
+
+    // Depth is written even with its test off, so the test stays on and
+    // always passes.
+    const bool depth_test = Field(mask, 0, 1) != 0;
+    VkPipelineDepthStencilStateCreateInfo depth{};
+    depth.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depth.depthTestEnable = VK_TRUE;
+    depth.depthCompareOp = depth_test ? CompareOp(Field(mask, 4, 3)) : VK_COMPARE_OP_ALWAYS;
+    depth.depthWriteEnable = depth_writes && Field(mask, 12, 1) != 0 ? VK_TRUE : VK_FALSE;
+    depth.stencilTestEnable = has_stencil && Field(stencil_test, 0, 1) != 0 ? VK_TRUE : VK_FALSE;
+    depth.front = {.failOp = StencilOp(Field(stencil_operation, 0, 3)),
+                   .passOp = StencilOp(Field(stencil_operation, 8, 3)),
+                   .depthFailOp = StencilOp(Field(stencil_operation, 4, 3)),
+                   .compareOp = CompareOp(Field(stencil_test, 4, 3)),
+                   .compareMask = Field(stencil_test, 24, 8),
+                   .writeMask = depth_writes ? Field(stencil_test, 8, 8) : 0U,
+                   .reference = Field(stencil_test, 16, 8)};
+    depth.back = depth.front;
+
+    VkPipelineColorBlendAttachmentState attachment{};
+    attachment.blendEnable = Field(operation, 8, 1) != 0 ? VK_TRUE : VK_FALSE;
+    attachment.colorBlendOp = BlendOp(Field(blend, 0, 3));
+    attachment.alphaBlendOp = BlendOp(Field(blend, 8, 3));
+    attachment.srcColorBlendFactor = BlendFactor(Field(blend, 16, 4));
+    attachment.dstColorBlendFactor = BlendFactor(Field(blend, 20, 4));
+    attachment.srcAlphaBlendFactor = BlendFactor(Field(blend, 24, 4));
+    attachment.dstAlphaBlendFactor = BlendFactor(Field(blend, 28, 4));
+    attachment.colorWriteMask = color_writes ? Field(mask, 8, 4) : 0U;
+    VkPipelineColorBlendStateCreateInfo blending{};
+    blending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    blending.logicOpEnable = attachment.blendEnable == VK_TRUE ? VK_FALSE : VK_TRUE;
+    blending.logicOp = LogicOp(Field(w[3], 0, 4));
+    blending.attachmentCount = 1;
+    blending.pAttachments = &attachment;
+    const std::span<float, 4> constants{blending.blendConstants};
+    for (std::size_t channel = 0; channel < constants.size(); ++channel) {
+        constants[channel] =
+            static_cast<float>(Field(w[4], 8 * static_cast<unsigned>(channel), 8)) / 255.0F;
+    }
+    const std::array<VkDynamicState,6> dynamic={VK_DYNAMIC_STATE_VIEWPORT,VK_DYNAMIC_STATE_SCISSOR,VK_DYNAMIC_STATE_BLEND_CONSTANTS,VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK,VK_DYNAMIC_STATE_STENCIL_WRITE_MASK,VK_DYNAMIC_STATE_STENCIL_REFERENCE};
+    VkPipelineDynamicStateCreateInfo dynamics{};
+    dynamics.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamics.dynamicStateCount = static_cast<std::uint32_t>(dynamic.size());
+    dynamics.pDynamicStates = dynamic.data();
+
+    VkGraphicsPipelineCreateInfo create{};
+    create.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    create.stageCount = 2;
+    create.pStages = stages.data();
+    create.pVertexInputState = &input;
+    create.pInputAssemblyState = &assembly;
+    create.pViewportState = &viewport;
+    create.pRasterizationState = &raster;
+    create.pMultisampleState = &multisample;
+    create.pDepthStencilState = &depth;
+    create.pColorBlendState = &blending;
+    create.pDynamicState = &dynamics;
+    create.layout = pipeline_layout_;
+    create.renderPass = render_pass_;
+    VkPipeline pipeline = VK_NULL_HANDLE;
+    if (const core::Status made = Check(
+            vkCreateGraphicsPipelines(device_, context_->PipelineCache(), 1, &create, nullptr, &pipeline),
+            "vkCreateGraphicsPipelines");
+        !made) {
+        return made.Failure();
+    }
+    return pipeline;
+}
+
+// The pipeline a draw is drawn with. One made for the draw's configuration is
+// built on another thread, because the driver takes about a second to compile
+// the shader and the game would stand still for it; until it is ready the draw
+// takes the pipeline of the generic shader, which draws the same pixels
+// (ADR 0031).
+core::Result<VkPipeline> VulkanGpuBackend::Implementation::Pipeline(const PipelineKey& key) {
+    if (const auto found = pipelines_.find(key); found != pipelines_.end()) {
+        return found->second;
+    }
+    if (key.fragment != 0) {
+        if (const auto building = building_.find(key); building != building_.end()) {
+            if (building->second.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+                const core::Result<VkPipeline> built = building->second.get();
+                building_.erase(building);
+                if (!built) {
+                    return built.Failure();
+                }
+                pipelines_.emplace(key, built.Value());
+                return built.Value();
+            }
+        } else {
+            StartPipeline(key);
+        }
+        ++fallback_draws_;
+        PipelineKey generic = key;
+        generic.fragment = 0;
+        return Pipeline(generic);
+    }
+    const VkShaderModule vertex =
+        key.program == 0 ? vertex_module_ : shaded_modules_.at(key.program);
+    const Stopwatch making{times_.pipelines};
+    const core::Result<VkPipeline> pipeline = BuildPipeline(key, vertex, fragment_module_);
+    if (pipeline) {
+        pipelines_.emplace(key, pipeline.Value());
+    }
+    return pipeline;
+}
+
+void VulkanGpuBackend::Implementation::StartPipeline(const PipelineKey& key) {
+    const VkShaderModule vertex =
+        key.program == 0 ? vertex_module_ : shaded_modules_.at(key.program);
+    building_.emplace(
+        key,
+        std::async(std::launch::async, [this, key, vertex, spirv = compiling_.at(key.fragment)] {
+            const core::Result<std::vector<std::uint32_t>>& code = spirv.get();
+            if (!code) {
+                return core::Result<VkPipeline>{code.Failure()};
+            }
+            VkShaderModuleCreateInfo create{};
+            create.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+            create.codeSize = code.Value().size() * sizeof(std::uint32_t);
+            create.pCode = code.Value().data();
+            VkShaderModule fragment = VK_NULL_HANDLE;
+            if (const core::Status made =
+                    Check(vkCreateShaderModule(device_, &create, nullptr, &fragment),
+                          "vkCreateShaderModule");
+                !made) {
+                return core::Result<VkPipeline>{made.Failure()};
+            }
+            const core::Result<VkPipeline> pipeline = BuildPipeline(key, vertex, fragment);
+            // A shader module may be destroyed once the pipeline is made.
+            vkDestroyShaderModule(device_, fragment, nullptr);
+            return pipeline;
+        }));
+}
+
+core::Status VulkanGpuBackend::Implementation::CreateImage(Image& image,
+                                                           VkFormat format,
+                                                           VkImageUsageFlags usage,
+                                                           VkImageAspectFlags aspect,
+                                                           std::uint32_t width,
+                                                           std::uint32_t height) {
+    const VkImageCreateInfo create{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+                                   .pNext = nullptr,
+                                   .flags = 0,
+                                   .imageType = VK_IMAGE_TYPE_2D,
+                                   .format = format,
+                                   .extent = {.width = width, .height = height, .depth = 1},
+                                   .mipLevels = 1,
+                                   .arrayLayers = 1,
+                                   .samples = VK_SAMPLE_COUNT_1_BIT,
+                                   .tiling = VK_IMAGE_TILING_OPTIMAL,
+                                   .usage = usage | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                                            VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                                   .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+                                   .queueFamilyIndexCount = 0,
+                                   .pQueueFamilyIndices = nullptr,
+                                   .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED};
+    if (const core::Status made =
+            Check(vkCreateImage(device_, &create, nullptr, &image.image), "vkCreateImage");
+        !made) {
+        return made;
+    }
+    VkMemoryRequirements requirements{};
+    vkGetImageMemoryRequirements(device_, image.image, &requirements);
+    const std::optional<std::uint32_t> type =
+        context_->MemoryType(requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (!type) {
+        return core::Error{"no device memory for an image"};
+    }
+    VkMemoryAllocateInfo allocate{};
+    allocate.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocate.allocationSize = requirements.size;
+    allocate.memoryTypeIndex = *type;
+    if (const core::Status made =
+            Check(vkAllocateMemory(device_, &allocate, nullptr, &image.memory), "vkAllocateMemory");
+        !made) {
+        return made;
+    }
+    vkBindImageMemory(device_, image.image, image.memory, 0);
+    VkImageViewCreateInfo view{};
+    view.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    view.image = image.image;
+    view.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    view.format = format;
+    view.subresourceRange = {.aspectMask = aspect,
+                             .baseMipLevel = 0,
+                             .levelCount = 1,
+                             .baseArrayLayer = 0,
+                             .layerCount = 1};
+    return Check(vkCreateImageView(device_, &view, nullptr, &image.view), "vkCreateImageView");
+}
+
+void VulkanGpuBackend::Implementation::DestroyImage(Image& image) {
+    vkDestroyImageView(device_, image.view, nullptr);
+    vkDestroyImage(device_, image.image, nullptr);
+    vkFreeMemory(device_, image.memory, nullptr);
+}
+
+core::Status VulkanGpuBackend::Implementation::CreateAttachments(Attachments& made,
+                                                                 std::uint32_t width,
+                                                                 std::uint32_t height) {
+    if (const core::Status color = CreateImage(made.color,
+                                               ColorImageFormat,
+                                               VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                                               VK_IMAGE_ASPECT_COLOR_BIT,
+                                               width,
+                                               height);
+        !color) {
+        return color;
+    }
+    if (const core::Status depth =
+            CreateImage(made.depth,
+                        DepthImageFormat,
+                        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                        VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT,
+                        width,
+                        height);
+        !depth) {
+        return depth;
+    }
+    const std::array<VkImageView, 2> views = {made.color.view, made.depth.view};
+    VkFramebufferCreateInfo framebuffer{};
+    framebuffer.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebuffer.renderPass = render_pass_;
+    framebuffer.attachmentCount = 2;
+    framebuffer.pAttachments = views.data();
+    framebuffer.width = width;
+    framebuffer.height = height;
+    framebuffer.layers = 1;
+    return Check(vkCreateFramebuffer(device_, &framebuffer, nullptr, &made.framebuffer),
+                 "vkCreateFramebuffer");
+}
+
+void VulkanGpuBackend::Implementation::DestroyAttachments(Attachments& attachments) {
+    vkDeviceWaitIdle(device_);
+    vkDestroyFramebuffer(device_, attachments.framebuffer, nullptr);
+    DestroyImage(attachments.color);
+    DestroyImage(attachments.depth);
+}
+
+VulkanGpuBackend::Implementation::~Implementation() {
+    // Memory is left true; there is nobody to tell if this fails.
+    static_cast<void>(WriteBackAll());
+    vkDeviceWaitIdle(device_);
+    for(auto& snapshot:texture_pool_)DestroyImage(snapshot->native);
+    for (const std::unique_ptr<Slot>& slot : slots_) {
+        DestroyAttachments(slot->images);
+    }
+    for (auto& [key, building] : building_) {
+        if (const core::Result<VkPipeline> built = building.get(); built) {
+            vkDestroyPipeline(device_, built.Value(), nullptr);
+        }
+    }
+    for (auto& [key, pipeline] : pipelines_) {
+        vkDestroyPipeline(device_, pipeline, nullptr);
+    }
+    for (auto& [key, module] : shaded_modules_) {
+        vkDestroyShaderModule(device_, module, nullptr);
+    }
+    vkDestroyShaderModule(device_, vertex_module_, nullptr);
+    vkDestroyShaderModule(device_, fragment_module_, nullptr);
+    vkDestroyRenderPass(device_, render_pass_, nullptr);
+    vkDestroyDescriptorPool(device_, descriptor_pool_, nullptr);
+    vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
+    vkDestroyDescriptorSetLayout(device_, set_layout_, nullptr);
+}
+
+// ---------------------------------------------------------------------------
+
+core::Result<std::unique_ptr<VulkanGpuBackend>>
+VulkanGpuBackend::Create(VulkanContext& context,
+                         gpu::GpuMemory& memory,
+                         gpu::Sampling sampling,
+                         VertexShading shading,
+                         FragmentShading fragments, std::uint32_t resolution_scale, bool resident_textures) {
+    auto implementation =
+        std::make_unique<Implementation>(context, memory, sampling, shading, fragments, resolution_scale, resident_textures);
+    if (const core::Status ready = implementation->Initialise(); !ready) {
+        return ready.Failure();
+    }
+    return std::unique_ptr<VulkanGpuBackend>{new VulkanGpuBackend(std::move(implementation))};
+}
+
+VulkanGpuBackend::VulkanGpuBackend(std::unique_ptr<Implementation> implementation)
+    : implementation_(std::move(implementation)) {}
+
+VulkanGpuBackend::~VulkanGpuBackend() = default;
+std::optional<gpu::Picture> VulkanGpuBackend::HighResolutionScreen(const gpu::MemoryRange&range){if(const auto*p=implementation_->BorrowHighResolutionScreen(range))return *p;return std::nullopt;}
+const gpu::Picture* VulkanGpuBackend::BorrowHighResolutionScreen(const gpu::MemoryRange&range){return implementation_->BorrowHighResolutionScreen(range);}
+
+
+core::Status VulkanGpuBackend::RunCommandList(std::span<const std::uint8_t> list) {
+    return implementation_->RunCommandList(list);
+}
+
+core::Status VulkanGpuBackend::BeforeRead(std::uint32_t physical, std::uint32_t size) {
+    return implementation_->BeforeRead(physical, size);
+}
+
+core::Result<bool>
+VulkanGpuBackend::RunDisplayTransfer(const domain::gpu::TransferConfig& transfer) {
+    return implementation_->RunDisplayTransfer(transfer);
+}
+
+core::Status VulkanGpuBackend::BeforeWrite(std::uint32_t physical, std::uint32_t size) {
+    return implementation_->BeforeWrite(physical, size);
+}
+
+ports::GpuBackendStatistics VulkanGpuBackend::Statistics() const {
+    return implementation_->Statistics();
+}
+
+std::string VulkanGpuBackend::Describe() const {
+    return std::format("Vulkan on {}, {} draws' vertices shaded on the GPU, sampling {}",
+                       implementation_->DeviceName(),
+                       implementation_->GpuShadedDraws(),
+                       implementation_->SamplingMode() == gpu::Sampling::Hardware
+                           ? "as the registers say"
+                           : "as Azahar does");
+}
+
+}  // namespace hexlith::adapters::vulkan

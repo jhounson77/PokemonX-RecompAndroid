@@ -1,0 +1,74 @@
+--- a/src/domain/memory/process_memory.cpp
++++ b/src/domain/memory/process_memory.cpp
+@@ -40,8 +40,16 @@
+ 
+ ProcessMemory::ProcessMemory() : host_(PageCount, nullptr), access_(PageCount, Access::None) {}
+ 
++core::Status ProcessMemory::UseExternal(ExternalMemory& memory) {
++    if (!targets_.empty()) return core::Error{"external memory requires an empty address space"};
++    external_ = &memory;
++    return {};
++}
++
++
+ core::Status
+ ProcessMemory::CheckRange(std::uint32_t address, std::uint32_t size, bool must_be_mapped) const {
++    if (external_ != nullptr) return core::Error{"mapping belongs to the external runtime"};
+     if (PageOffset(address) != 0 || PageOffset(size) != 0) {
+         return core::Error{
+             std::format("0x{:X} bytes at 0x{:08X} are not on page boundaries", size, address)};
+@@ -196,6 +204,13 @@
+ 
+ template<typename Value>
+ std::optional<Value> ProcessMemory::ReadValue(std::uint32_t address) const {
++    if (external_ != nullptr) {
++        Value value{};
++        auto bytes = std::span<std::uint8_t>(reinterpret_cast<std::uint8_t*>(&value), sizeof(value));
++        if (!external_->Read(address, bytes)) return std::nullopt;
++        return value;
++    }
++
+     // Inside one page, which is every aligned access: one lookup, one copy.
+     if (PageOffset(address) + sizeof(Value) <= PageSize) {
+         const std::span<const std::uint8_t> host = HostBytes(address, Access::Read);
+@@ -223,6 +238,10 @@
+ 
+ template<typename Value>
+ bool ProcessMemory::WriteValue(std::uint32_t address, Value value) {
++    if (external_ != nullptr) {
++        return external_->Write(address, std::span<const std::uint8_t>(reinterpret_cast<const std::uint8_t*>(&value), sizeof(value)));
++    }
++
+     if (PageOffset(address) + sizeof(Value) <= PageSize) {
+         const std::span<std::uint8_t> host = HostBytes(address, Access::Write);
+         if (host.empty()) {
+--- a/src/domain/memory/process_memory.h
++++ b/src/domain/memory/process_memory.h
+@@ -87,8 +87,19 @@
+ // changing them, belong to kernel::AddressSpace.
+ //
+ // Satisfies GuestMemory.
++// External memory owns mapping and GPU coherence in a hybrid runtime.
++class ExternalMemory {
++public:
++    virtual ~ExternalMemory() = default;
++    virtual bool Read(std::uint32_t address, std::span<std::uint8_t> bytes) = 0;
++    virtual bool Write(std::uint32_t address, std::span<const std::uint8_t> bytes) = 0;
++};
++
+ class ProcessMemory {
+ public:
++    // Only an empty address space may delegate; never shadow a mapped page.
++    core::Status UseExternal(ExternalMemory& memory);
++
+     // The ARM11's small page, which is also the granularity Horizon maps in.
+     static constexpr std::uint32_t PageSize = 0x1000;
+ 
+@@ -247,6 +258,7 @@
+     // What keeps each mapped page's backing alive, and where in it the page is.
+     // Touched only when the mapping changes, never by a read or a write.
+     std::unordered_map<std::uint32_t, PageTarget> targets_;
++    ExternalMemory* external_ = nullptr;
+ };
+ 
+ }  // namespace hexlith::domain::memory

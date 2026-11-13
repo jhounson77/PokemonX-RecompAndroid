@@ -1,0 +1,22 @@
+--- a/src/common/android_utils.cpp
++++ b/src/common/android_utils.cpp
+@@ -199,15 +199,10 @@
+     return env->GetStringUTFChars(jflavor, nullptr);
+ }
+ 
+-bool IsPortraitMode() {
+-    auto env = GetEnvForThread();
+-    return (JNI_FALSE != env->CallStaticBooleanMethod(native_library, is_portrait_mode));
+-}
+-
+-bool IsUsingAngleForOpenGL() {
+-    auto env = GetEnvForThread();
+-    return env->CallStaticBooleanMethod(native_library, is_using_angle_for_opengl);
+-}
++// This native frontend supplies its own landscape window and Vulkan loader.
++// Azahar's original Java class and its JNI method IDs are not initialized here.
++bool IsPortraitMode() { return false; }
++bool IsUsingAngleForOpenGL() { return false; }
+ 
+ bool CopyFile(const std::string& source, const std::string& destination_path,
+               const std::string& destination_filename) {
