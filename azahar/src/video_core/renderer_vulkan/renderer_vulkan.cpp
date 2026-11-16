@@ -13,6 +13,7 @@
 #include "video_core/gpu.h"
 #include "video_core/pica/pica_core.h"
 #include "video_core/renderer_vulkan/renderer_vulkan.h"
+#include "video_core/renderer_vulkan/frame_generation_commands.h"
 #include "video_core/renderer_vulkan/vk_memory_util.h"
 #include "video_core/renderer_vulkan/vk_shader_util.h"
 
@@ -23,6 +24,8 @@
 
 #include "video_core/host_shaders/vulkan_cursor_frag.h"
 #include "video_core/host_shaders/vulkan_cursor_vert.h"
+#include "video_core/host_shaders/vulkan_frame_flow_frag.h"
+#include "video_core/host_shaders/vulkan_frame_resolve_frag.h"
 
 #include <vk_mem_alloc.h>
 #if defined(__APPLE__) && !defined(HAVE_LIBRETRO)
@@ -141,6 +144,7 @@ RendererVulkan::~RendererVulkan() {
     scheduler.Finish();
     main_present_window.WaitPresent();
     device.waitIdle();
+    DestroyFrameHistory();
     // Pending asynchronous detector resources are freed only after GPU shutdown.
     if(ui_probe_frame.framebuffer)device.destroyFramebuffer(ui_probe_frame.framebuffer);
     if(ui_probe_frame.image_view)device.destroyImageView(ui_probe_frame.image_view);
@@ -250,6 +254,7 @@ void RendererVulkan::PrepareDraw(Frame* frame, const Layout::FramebufferLayout& 
 
 void RendererVulkan::RenderToWindow(PresentWindow& window, const Layout::FramebufferLayout& layout,
                                     bool flipped) {
+    if (!secondaryWindowEnabled && !isSecondaryWindow && PresentWithFrameGeneration(window,layout,flipped)) return;
     if (!Settings::values.use_skip_duplicate_frames.GetValue() ||
         Core::PerfStats::game_frames_updated) {
         Frame* frame = window.GetRenderFrame();
@@ -319,6 +324,11 @@ void RendererVulkan::CompileShaders() {
                                  vk::ShaderStageFlagBits::eFragment, device, preamble);
     present_shaders[2] = Compile(HostShaders::VULKAN_PRESENT_INTERLACED_FRAG,
                                  vk::ShaderStageFlagBits::eFragment, device, preamble);
+
+    if(PokemonXFrames::target.load()==60)try{
+    present_shaders[3] = Compile(HostShaders::VULKAN_FRAME_FLOW_FRAG, vk::ShaderStageFlagBits::eFragment, device);
+    present_shaders[4] = Compile(HostShaders::VULKAN_FRAME_RESOLVE_FRAG, vk::ShaderStageFlagBits::eFragment, device);
+    }catch(const std::exception& e){frame_generation_failed=true;LOG_WARNING(Render_Vulkan,"Interpolation shaders unavailable: {}",e.what());}
 
     cursor_vertex_shader =
         Compile(HostShaders::VULKAN_CURSOR_VERT, vk::ShaderStageFlagBits::eVertex, device);
@@ -465,6 +475,7 @@ void RendererVulkan::BuildPipelines() {
     };
 
     for (u32 i = 0; i < PRESENT_PIPELINES; i++) {
+        if(i>=3&&(!present_shaders[i]||frame_generation_failed))continue;
         const std::array shader_stages = {
             vk::PipelineShaderStageCreateInfo{
                 .stage = vk::ShaderStageFlagBits::eVertex,
@@ -493,10 +504,16 @@ void RendererVulkan::BuildPipelines() {
             .renderPass = main_present_window.Renderpass(),
         };
 
-        const auto [result, pipeline] =
-            instance.GetDevice().createGraphicsPipeline({}, pipeline_info);
-        ASSERT_MSG(result == vk::Result::eSuccess, "Unable to build present pipelines");
-        present_pipelines[i] = pipeline;
+        try {
+            const auto [result, pipeline] = instance.GetDevice().createGraphicsPipeline({}, pipeline_info);
+            if(i>=3&&result!=vk::Result::eSuccess){frame_generation_failed=true;continue;}
+            ASSERT_MSG(result == vk::Result::eSuccess, "Unable to build present pipelines");
+            present_pipelines[i] = pipeline;
+        } catch(const std::exception& e) {
+            if(i<3)throw;
+            frame_generation_failed=true;
+            LOG_WARNING(Render_Vulkan,"Interpolation pipeline unavailable: {}",e.what());
+        }
     }
 
     // Build cursor pipeline (simple position-only, inverted color blending)
@@ -1234,10 +1251,14 @@ void RendererVulkan::ConsumeInterfaceProbe(const std::array<u8,80*60*4>& pixels)
             if(ui_menu_exit.Observe(PokemonXUI::generation.load(),PokemonXUI::battle_menu_full,PokemonXUI::battle_menu_exit,PokemonXUI::submenu_loaded)){
                 PokemonXUI::ReturnFromBattleMenu();
                 LOG_INFO(Core_ARM11,"Battle auxiliary menu exited; primary screen restored for action execution");
-            }else if(ui_commands.Return(detected,pixels.data(),80,60,PokemonXUI::popup_seen_menu)){
+            }else if(ui_commands.Return(detected,pixels.data(),80,60,PokemonXUI::popup_seen_menu,PokemonXUI::popup_close_requested)){
                 PokemonXUI::ClosePopup();PokemonXUI::decision_hidden=false;PokemonXUI::Observe(3);
                 LOG_INFO(Core_ARM11,"Battle menu returned to verified original commands");
-            }else if(!ui_commands.Matches(pixels.data(),80,60)&&PokemonXUI::MenuImageVisible(pixels.data(),80,60))PokemonXUI::popup_seen_menu=true;
+            }else if(detected!=3||!ui_commands.Matches(pixels.data(),80,60)){
+                // Party/target screens can be flat or dark. Their visibility
+                // must not depend on the overworld menu's brightness heuristic.
+                PokemonXUI::popup_seen_menu=true;
+            }
         }else{
             PokemonXUI::ObservePopup(PokemonXUI::IsPSS(pixels.data(),80,60),PokemonXUI::MenuImageVisible(pixels.data(),80,60));
         }
@@ -1606,6 +1627,7 @@ bool RendererVulkan::TryRenderScreenshotWithHostMemory() {
 }
 
 void RendererVulkan::NotifySurfaceChanged(bool is_second_window) {
+    ++PokemonXFrames::epoch;
     if (is_second_window) {
         if (secondary_present_window_ptr) {
             secondary_present_window_ptr->NotifySurfaceChanged();
@@ -1614,5 +1636,7 @@ void RendererVulkan::NotifySurfaceChanged(bool is_second_window) {
         main_present_window.NotifySurfaceChanged();
     }
 }
+
+#include "renderer_frame_generation.inc"
 
 } // namespace Vulkan

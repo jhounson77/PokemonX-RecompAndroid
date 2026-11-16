@@ -1,3 +1,5 @@
+#include "domain/lift/execution_profile.h"
+#include "common/px_host_timings.h"
 #include <jni.h>
 #include <android/native_window_jni.h>
 #include <android/log.h>
@@ -19,6 +21,7 @@
 #include "audio_core/aaudio_sink.h"
 #include "audio_core/dsp_interface.h"
 #include "render_scale.h"
+#include "common/px_frame_generation.h"
 #include "common/px_screen_interface.h"
 #include "program.h"
 #include "battle_data.h"
@@ -42,7 +45,7 @@ std::atomic<bool> configured_textures{false};
 std::atomic<int> buttons{0},cx{0},cy{0},tx{-1},ty{-1},scale{1},configured_scale{1},renderer{0};
 std::atomic<std::uint64_t> presented{0},emulated{0};
 auto& mode=PokemonXUI::mode;
-std::atomic<double> reported_fps{std::numeric_limits<double>::quiet_NaN()},reported_speed{std::numeric_limits<double>::quiet_NaN()};
+std::atomic<double> reported_fps{std::numeric_limits<double>::quiet_NaN()},reported_speed{std::numeric_limits<double>::quiet_NaN()},reported_visual{std::numeric_limits<double>::quiet_NaN()};
 std::mutex surface_mutex,log_mutex,notify_mutex;
 std::function<void()> notify_surface;
 ANativeWindow* requested_surface=nullptr;
@@ -131,6 +134,7 @@ extern "C" JNIEXPORT void JNICALL Java_org_pokemonx_recomp_MainActivity_nativeSu
 }
 extern "C" JNIEXPORT void JNICALL Java_org_pokemonx_recomp_MainActivity_nativeTextures(JNIEnv*,jclass,jboolean enabled){configured_textures=enabled;}
 extern "C" JNIEXPORT void JNICALL Java_org_pokemonx_recomp_MainActivity_nativeConfigure(JNIEnv*e,jclass,jint s,jstring dir,jstring lib){configured_scale=s==0?0:std::clamp(static_cast<int>(s),1,PokemonX::MaximumScale);driver_dir=String(e,dir);driver_library=String(e,lib);}
+extern "C" JNIEXPORT void JNICALL Java_org_pokemonx_recomp_MainActivity_nativeFrameTarget(JNIEnv*,jclass,jint value){PokemonXFrames::target=value==60?60:30;++PokemonXFrames::epoch;}
 extern "C" JNIEXPORT void JNICALL Java_org_pokemonx_recomp_MainActivity_nativeRenderer(JNIEnv*,jclass,jint value){renderer=value;}
 extern "C" JNIEXPORT void JNICALL Java_org_pokemonx_recomp_MainActivity_nativeResidentTextures(JNIEnv*,jclass,jboolean){}
 extern "C" JNIEXPORT void JNICALL Java_org_pokemonx_recomp_MainActivity_nativeMode(JNIEnv*,jclass,jint value){++PokemonXUI::generation;PokemonXUI::popup_requested=false;PokemonXUI::battle_menu_full=false;mode=std::clamp(static_cast<int>(value),0,5);tx=-1;ty=-1;}
@@ -138,26 +142,27 @@ extern "C" JNIEXPORT void JNICALL Java_org_pokemonx_recomp_MainActivity_nativeOp
 extern "C" JNIEXPORT jboolean JNICALL Java_org_pokemonx_recomp_MainActivity_nativePopupVisible(JNIEnv*,jclass){return PokemonXUI::popup_requested.load();}
 extern "C" JNIEXPORT void JNICALL Java_org_pokemonx_recomp_MainActivity_nativeCommitUI(JNIEnv*,jclass,jint profile,jint index){PokemonXUI::Commit(profile,index);}
 extern "C" JNIEXPORT void JNICALL Java_org_pokemonx_recomp_MainActivity_nativeBattleRegions(JNIEnv*e,jclass,jint w,jint h,jfloatArray out){if(!out||e->GetArrayLength(out)<34)return;int requested=mode.load(),effective=PokemonXUI::Effective(requested);auto ui=PokemonXUI::Build(effective,w,h);std::array<jfloat,34> values{};values[0]=float(effective);values[1]=float(ui.count);values[2]=float(requested);for(int i=0;i<ui.count;i++){auto p=ui.pieces[i];int at=3+i*6;values[at]=p.destination.x;values[at+1]=p.destination.y;values[at+2]=p.destination.w;values[at+3]=p.destination.h;values[at+4]=p.image?1.f:0.f;values[at+5]=p.enabled?1.f:0.f;}values[3+ui.count*6]=float(PokemonXUI::command_focus.load());e->SetFloatArrayRegion(out,0,values.size(),values.data());}
-extern "C" JNIEXPORT void JNICALL Java_org_pokemonx_recomp_MainActivity_nativeMoveStats(JNIEnv*e,jclass,jintArray out){if(!out||e->GetArrayLength(out)<15)return;auto v=PokemonX::BattleDataSnapshot();if(!PokemonXUI::move_cards)v[0]=0;e->SetIntArrayRegion(out,0,v.size(),v.data());}
+extern "C" JNIEXPORT void JNICALL Java_org_pokemonx_recomp_MainActivity_nativeMoveStats(JNIEnv*e,jclass,jintArray out){if(!out||e->GetArrayLength(out)<15)return;auto v=PokemonX::BattleDataSnapshot();if(!PokemonXUI::move_cards||!PokemonXUI::metadata_overlay)v[0]=0;e->SetIntArrayRegion(out,0,v.size(),v.data());}
 extern "C" JNIEXPORT jint JNICALL Java_org_pokemonx_recomp_MainActivity_nativeEffectiveMode(JNIEnv*,jclass){return PokemonXUI::Effective(mode.load());}
+extern "C" JNIEXPORT void JNICALL Java_org_pokemonx_recomp_MainActivity_nativeBattleMetadata(JNIEnv*,jclass,jboolean enabled){if(PokemonXUI::metadata_overlay.exchange(enabled)!=bool(enabled))++PokemonXUI::battle_actor_epoch;}
 extern "C" JNIEXPORT void JNICALL Java_org_pokemonx_recomp_MainActivity_nativeMoveCards(JNIEnv*,jclass,jboolean enabled){PokemonXUI::move_cards=enabled;}
 extern "C" JNIEXPORT void JNICALL Java_org_pokemonx_recomp_MainActivity_nativeAutomaticUI(JNIEnv*,jclass,jboolean enabled){PokemonXUI::automatic=enabled;}
 extern "C" JNIEXPORT jintArray JNICALL Java_org_pokemonx_recomp_MainActivity_nativeMapTouch(JNIEnv*e,jclass,jfloat x,jfloat y,jint w,jint h,jint selected){auto [tx,ty]=PokemonXUI::Touch(selected,w,h,x,y);jint values[]={tx,ty};auto out=e->NewIntArray(2);if(out)e->SetIntArrayRegion(out,0,2,values);return out;}
 static PokemonXUI::CommandController command_controller;
 extern "C" JNIEXPORT void JNICALL Java_org_pokemonx_recomp_MainActivity_nativeInput(JNIEnv*,jclass,jint b,jint x,jint y,jint touchx,jint touchy){command_controller.Route(b,x,y,touchx,touchy);int previous=buttons.load();bool changed=previous!=b||((tx.load()>=0&&ty.load()>=0)!=(touchx>=0&&touchy>=0));if((b&2)&&!(previous&2)){if(PokemonXUI::Effective(mode.load())==4)PokemonXUI::Commit(4,4);PokemonXUI::decision_hidden=false;if(PokemonXUI::popup_requested)PokemonXUI::popup_close_requested=true;}if((b&1)&&!(previous&1)){if(PokemonXUI::decision_hidden)PokemonXUI::decision_hidden=false;}buttons=b;cx=x;cy=y;tx=touchx;ty=touchy;if(changed)PokemonXUI::force_probe=true;}
-extern "C" JNIEXPORT void JNICALL Java_org_pokemonx_recomp_MainActivity_nativePause(JNIEnv*,jclass,jboolean value){paused=value;command_controller.Reset();AudioCore::SetAndroidOutputMuted(value);if(value){reported_fps=std::numeric_limits<double>::quiet_NaN();reported_speed=std::numeric_limits<double>::quiet_NaN();}buttons=0;cx=0;cy=0;tx=-1;ty=-1;}
+extern "C" JNIEXPORT void JNICALL Java_org_pokemonx_recomp_MainActivity_nativePause(JNIEnv*,jclass,jboolean value){paused=value;++PokemonXFrames::epoch;command_controller.Reset();AudioCore::SetAndroidOutputMuted(value);if(value){reported_fps=std::numeric_limits<double>::quiet_NaN();reported_speed=std::numeric_limits<double>::quiet_NaN();reported_visual=std::numeric_limits<double>::quiet_NaN();}buttons=0;cx=0;cy=0;tx=-1;ty=-1;}
 extern "C" JNIEXPORT void JNICALL Java_org_pokemonx_recomp_MainActivity_nativeStop(JNIEnv*,jclass){stopping=true;}
-extern "C" JNIEXPORT jboolean JNICALL Java_org_pokemonx_recomp_MainActivity_nativePrepare(JNIEnv*,jclass){bool expected=false;if(!busy.compare_exchange_strong(expected,true))return false;stopping=false;paused=false;AudioCore::SetAndroidOutputMuted(false);presented=0;emulated=0;reported_fps=std::numeric_limits<double>::quiet_NaN();reported_speed=std::numeric_limits<double>::quiet_NaN();return true;}
+extern "C" JNIEXPORT jboolean JNICALL Java_org_pokemonx_recomp_MainActivity_nativePrepare(JNIEnv*,jclass){bool expected=false;if(!busy.compare_exchange_strong(expected,true))return false;stopping=false;paused=false;PokemonXFrames::submitted=0;PokemonXFrames::generated=0;++PokemonXFrames::epoch;AudioCore::SetAndroidOutputMuted(false);presented=0;emulated=0;reported_fps=std::numeric_limits<double>::quiet_NaN();reported_speed=std::numeric_limits<double>::quiet_NaN();reported_visual=std::numeric_limits<double>::quiet_NaN();return true;}
 extern "C" JNIEXPORT jlongArray JNICALL Java_org_pokemonx_recomp_MainActivity_nativeCounters(JNIEnv*e,jclass){jlong values[]={static_cast<jlong>(presented.load()),static_cast<jlong>(emulated.load())};auto result=e->NewLongArray(2);if(result)e->SetLongArrayRegion(result,0,2,values);return result;}
 extern "C" JNIEXPORT jdoubleArray JNICALL Java_org_pokemonx_recomp_MainActivity_nativePerformance(JNIEnv*e,jclass){
- const jdouble values[]={reported_fps.load(),reported_speed.load()};auto result=e->NewDoubleArray(2);if(result)e->SetDoubleArrayRegion(result,0,2,values);return result;
+ const jdouble values[]={reported_fps.load(),reported_speed.load(),reported_visual.load()};auto result=e->NewDoubleArray(3);if(result)e->SetDoubleArrayRegion(result,0,3,values);return result;
 }
 extern "C" JNIEXPORT void JNICALL Java_org_pokemonx_recomp_MainActivity_nativeRun(JNIEnv*e,jobject activity,jstring data,jstring libs,jstring session,jboolean warming){
  auto dir=String(e,data),libdir=String(e,libs);log_path=String(e,session);crash_fd=open(log_path.c_str(),O_WRONLY|O_APPEND|O_CREAT,0600);for(int s:{SIGSEGV,SIGBUS,SIGILL,SIGABRT})std::signal(s,HandleCrash);
  auto& system=Core::System::GetInstance();
  std::unique_ptr<Window> window;
  try{
-  Log("Starting Pokemon X native CPU + Azahar kernel/services/Vulkan V0.1.1 Beta");
+  Log("Starting Pokemon X native CPU + Azahar kernel/services/Vulkan V0.1.2 Teste 17");
   if(renderer!=0)throw std::runtime_error("Azahar backend requires Vulkan; select Vulkan in settings");
   std::filesystem::create_directories(dir+"/azahar/");FileUtil::SetUserPath(dir+"/azahar/");
   for(const auto* path:{"shaders/vulkan/pipeline","shaders/vulkan/transferable"})std::filesystem::create_directories(dir+"/azahar/"+path);
@@ -183,7 +188,7 @@ extern "C" JNIEXPORT void JNICALL Java_org_pokemonx_recomp_MainActivity_nativeRu
   const bool update15=std::filesystem::is_regular_file(update_path);
   const auto expected=update15?"7dc08ac5e2a87adabc31c304e1dfa3120a598ef072441983d09c96768cf67e74":"0f6d3e1d66cbcd55d46fa453db4b6aa489e03c3537c6b24026f2a53af142797a";
   Log(update15?"Selecting verified 1.5 native libraries":"Selecting base native libraries");
-  auto program=PokemonX::Program::Load(libdir+(update15?"/libpxmain15.so":"/libpxmain.so"),libdir+(update15?"/libpxmodules15.so":"/libpxmodules.so"),expected);PokemonX::SetProgram(program);
+  auto program=PokemonX::Program::Load(libdir+(update15?"/libpxmain15.so":"/libpxmain.so"),libdir+(update15?"/libpxmodules15.so":"/libpxmodules.so"),expected,update15?libdir+"/libpxintro15.so":std::string{},update15?libdir+"/libpxresume15.so":std::string{});PokemonX::SetProgram(program);
   window=std::make_unique<Window>(Driver(libdir));Status(e,activity,"Iniciando nucleo Azahar…");
   auto result=system.Load(*window,dir+"/game.cxi");MirrorLog();if(result!=Core::System::ResultStatus::Success)throw std::runtime_error("Azahar load status "+std::to_string(static_cast<int>(result)));
   {std::lock_guard lock(notify_mutex);notify_surface=[ptr=window.get()]{ptr->PollEvents();};}
@@ -198,23 +203,51 @@ extern "C" JNIEXPORT void JNICALL Java_org_pokemonx_recomp_MainActivity_nativeRu
   if(warming&&stopping){Log("Shader preparation cancelled");Status(e,activity,"Preparação cancelada. O cache já concluído foi preservado.");}else if(warming){Log("Import/manual shader preparation completed; game CPU was not executed");Status(e,activity,"Preparação concluída. Novos efeitos serão armazenados ao jogar.");}else Status(e,activity,"Pokémon X");
 
   Log("Azahar loaded with native CPU; internal Vulkan resolution "+std::to_string(scale.load())+"x; kernel, services and graphics supplied by Azahar");
-  auto last=std::chrono::steady_clock::now();double game_count=0,system_count=0;bool was_paused=false;
+  unsigned profile_reports=0;
+#if defined(PX_PROFILE_HOST_TIMINGS)
+  PokemonXTiming::Take();PokemonXTiming::TakeStages();
+#if defined(PX_PROFILE_EXECUTION)
+   hexlith::domain::lift::profile::Take();
+#endif
+#endif
+  auto last=std::chrono::steady_clock::now();std::uint64_t output_previous=PokemonXFrames::submitted.load(),generated_previous=0;double game_count=0,system_count=0;bool was_paused=false;
   while(!stopping&&!warming){
    window->PollEvents();if(paused){std::this_thread::sleep_for(std::chrono::milliseconds(20));last=std::chrono::steady_clock::now();was_paused=true;continue;}
-   if(was_paused){system.GetAndResetPerfStats();last=std::chrono::steady_clock::now();was_paused=false;}
+   if(was_paused){
+#if defined(PX_PROFILE_HOST_TIMINGS)
+   PokemonXTiming::Take();PokemonXTiming::TakeStages();
+#if defined(PX_PROFILE_EXECUTION)
+   hexlith::domain::lift::profile::Take();
+#endif
+#endif
+   system.GetAndResetPerfStats();output_previous=PokemonXFrames::submitted.load();generated_previous=PokemonXFrames::generated.load();last=std::chrono::steady_clock::now();was_paused=false;}
    result=system.RunLoop();
    if(result!=Core::System::ResultStatus::Success){Log("Azahar run status "+std::to_string(static_cast<int>(result)));break;}
    PokemonX::RefreshBattleData();
    auto now=std::chrono::steady_clock::now();double seconds=std::chrono::duration<double>(now-last).count();
-   if(seconds>=1){auto perf=system.GetAndResetPerfStats();reported_fps=perf.game_fps;reported_speed=perf.emulation_speed*100;game_count+=std::max(0.0,perf.game_fps)*seconds;system_count+=std::max(0.0,perf.system_fps)*seconds;presented=static_cast<std::uint64_t>(game_count);emulated=static_cast<std::uint64_t>(system_count);last=now;
+   if(seconds>=1){auto perf=system.GetAndResetPerfStats();reported_fps=perf.game_fps;reported_speed=perf.emulation_speed*100;auto output_now=PokemonXFrames::submitted.load(),generated_now=PokemonXFrames::generated.load();reported_visual=double(output_now-output_previous)/seconds;Log("Frame output: target="+std::to_string(PokemonXFrames::target.load())+", submitted_fps="+std::to_string(reported_visual.load())+", interpolated_frames="+std::to_string(generated_now-generated_previous)+", speed_limit_percent=100");output_previous=output_now;generated_previous=generated_now;game_count+=std::max(0.0,perf.game_fps)*seconds;system_count+=std::max(0.0,perf.system_fps)*seconds;presented=static_cast<std::uint64_t>(game_count);emulated=static_cast<std::uint64_t>(system_count);last=now;
     Log("Azahar profile: fps="+std::to_string(perf.game_fps)+", speed_percent="+std::to_string(perf.emulation_speed*100)+", gpu_seconds="+std::to_string(perf.time_gpu)+", svc_seconds="+std::to_string(perf.time_hle_svc)+", ipc_seconds="+std::to_string(perf.time_hle_ipc)+", present_seconds="+std::to_string(perf.time_swap)+", remaining_seconds="+std::to_string(perf.time_remaining));
     if(auto* audio=dynamic_cast<AudioCore::AAudioSink*>(&system.DSP().GetSink()))Log(audio->Diagnostics());
-    std::uint64_t entries=0,modules=0,interpreted=0;
-    for(u32 i=0;i<system.GetNumCores();++i){auto& cpu=dynamic_cast<PokemonX::ARMNative&>(system.GetCore(i));entries+=cpu.Statistics().entries;modules+=cpu.Statistics().module_entries;interpreted+=cpu.Statistics().interpreted;}
-    Log("Native CPU all cores: entries="+std::to_string(entries)+", module_entries="+std::to_string(modules)+", interpreted="+std::to_string(interpreted));MirrorLog();
+    std::uint64_t entries=0,modules=0,interpreted=0,decode_hits=0,decodes=0,retired=0,fallback_retired=0;
+    ++profile_reports;
+    for(u32 i=0;i<system.GetNumCores();++i){auto& cpu=dynamic_cast<PokemonX::ARMNative&>(system.GetCore(i));entries+=cpu.Statistics().entries;modules+=cpu.Statistics().module_entries;interpreted+=cpu.Statistics().interpreted;retired+=cpu.RetiredStatistics().total;fallback_retired+=cpu.RetiredStatistics().engine_fallback;decode_hits+=cpu.DecodeStatistics().hits;decodes+=cpu.DecodeStatistics().misses;if(profile_reports%5==0&&cpu.FallbackStatistics().Samples()!=0){auto sites=cpu.FallbackStatistics().Snapshot();std::sort(sites.begin(),sites.end(),[](const auto&a,const auto&b){return a.count>b.count;});Log("Fallback profile core="+std::to_string(i)+", sampled="+std::to_string(cpu.FallbackStatistics().Samples()));for(unsigned n=0;n<8&&sites[n].count;++n){const auto&r=sites[n];char pc[16];std::snprintf(pc,sizeof(pc),"%08X",r.pc);Log(std::string("Fallback site core=")+std::to_string(i)+", pc="+pc+", mode="+(r.thumb?"Thumb":"ARM")+", cause="+(r.native_yield?"native-yield":"no-entry")+", estimated_samples="+std::to_string(r.count)+", error_bound="+std::to_string(r.error));}}}
+    Log("Native CPU all cores: entries="+std::to_string(entries)+", module_entries="+std::to_string(modules)+", interpreted="+std::to_string(interpreted)+", decode_cache_hits="+std::to_string(decode_hits)+", decodes="+std::to_string(decodes));Log("Guest CPU retired: total="+std::to_string(retired)+", aot_managed="+std::to_string(retired-fallback_retired)+", engine_fallback="+std::to_string(fallback_retired));
+#if defined(PX_PROFILE_HOST_TIMINGS)
+    const auto timings=PokemonXTiming::Take();
+    const auto stages=PokemonXTiming::TakeStages();
+#if defined(PX_PROFILE_EXECUTION)
+    const auto execution=hexlith::domain::lift::profile::Take();
+    Log("CPU sampled runs: total="+std::to_string(execution.runs)+", sampled="+std::to_string(execution.sampled_runs)+", sampled_wall_ms="+std::to_string(execution.sampled_ns/1e6)+", target_rate=1/256");
+    constexpr const char* execution_names[]={"lookup","aot_managed","engine_fallback"};
+    for(unsigned i=0;i<execution.stages.size();++i){const auto& s=execution.stages[i];if(s.calls||s.ns||s.retired)Log(std::string("CPU sampled stage: name=")+execution_names[i]+", calls="+std::to_string(s.calls)+", wall_ms="+std::to_string(s.ns/1e6)+", retired="+std::to_string(s.retired));}
+#endif
+    for(std::size_t i=0;i<stages.size();++i)if(stages[i].calls||stages[i].ns||stages[i].max_ns){const auto& s=stages[i];Log(std::string("Host stage: name=")+PokemonXTiming::StageName(static_cast<PokemonXTiming::Stage>(i))+", calls="+std::to_string(s.calls)+", wall_ms="+std::to_string(s.ns/1e6)+", max_ms="+std::to_string(s.max_ns/1e6));}
+    Log("Host wall scopes: interval_s="+std::to_string(seconds)+", guest_runs="+std::to_string(timings.guest_calls)+", guest_run_ms="+std::to_string(timings.guest_ns/1e6)+", readbacks="+std::to_string(timings.readbacks)+", gpu_readback_sync_ms="+std::to_string(timings.sync_ns/1e6)+", readback_inside_guest_ms="+std::to_string(timings.inside_guest_ns/1e6)+", staged_bytes="+std::to_string(timings.staged_bytes)+", scaled_readbacks="+std::to_string(timings.scaled_readbacks));
+#endif
+    MirrorLog();
    }
   }
   {std::lock_guard lock(notify_mutex);notify_surface={};system.Shutdown();window.reset();}PokemonX::SetProgram({});MirrorLog();Log("Azahar session ended");
  }catch(const std::exception&error){{std::lock_guard lock(notify_mutex);notify_surface={};if(system.IsPoweredOn())system.Shutdown();window.reset();}PokemonX::SetProgram({});MirrorLog();Log(std::string("ERROR: ")+error.what());Status(e,activity,"Falha ao iniciar. Exporte os logs.");}
- if(crash_fd>=0){close(crash_fd);crash_fd=-1;}reported_fps=std::numeric_limits<double>::quiet_NaN();reported_speed=std::numeric_limits<double>::quiet_NaN();busy=false;
+ if(crash_fd>=0){close(crash_fd);crash_fd=-1;}reported_fps=std::numeric_limits<double>::quiet_NaN();reported_speed=std::numeric_limits<double>::quiet_NaN();reported_visual=std::numeric_limits<double>::quiet_NaN();busy=false;
 }

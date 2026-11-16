@@ -1,6 +1,6 @@
 # Pokémon X Recomp Android
 
-**V0.1.1 Beta** — projeto experimental de recompilação estática de Pokémon X para Android ARM64, com uma interface adaptada para jogar em uma ou duas telas.
+**V0.1.2** — projeto experimental de recompilação estática de Pokémon X para Android ARM64, com uma interface adaptada para jogar em uma ou duas telas.
 
 A CPU do jogo usa código nativo gerado pelo **Hexlith**. **Azahar** fornece kernel, serviços do 3DS, memória e auxilia na tradução gráfica para Vulkan. Instruções e módulos que não possuem uma tradução nativa válida usam o fallback do Hexlith.
 
@@ -11,7 +11,7 @@ A CPU do jogo usa código nativo gerado pelo **Hexlith**. **Azahar** fornece ker
 3. Ajuste resolução, driver Vulkan e controles antes de iniciar.
 4. Salve pelo menu do próprio jogo. Feche a sessão antes de importar ou exportar saves.
 
-A versão pública `0.1.1-beta` corrige o retorno da tela após fechar a bolsa ou a seleção de Pokémon com módulos auxiliares ainda carregados. O `versionCode` é **35**, para permitir atualização sobre os APKs de teste sem precisar desinstalar o aplicativo.
+A versão pública **v0.1.2** reúne as correções até a build Test17 (`versionCode` **52**, versão interna `0.1.2-test17`). Mantém o mesmo pacote e certificado para atualizar sem desinstalar. Inclui múltiplos packs de texturas e seleção entre 30 FPS e 60 FPS com interpolação experimental. Consulte as [notas da v0.1.2](docs/RELEASE_v0.1.2.md) para validações e limitações.
 
 ## Funcionalidades
 
@@ -27,8 +27,10 @@ A versão pública `0.1.1-beta` corrige o retorno da tela após fechar a bolsa o
 - FPS, velocidade de simulação, RAM do aplicativo e temperatura da bateria, com opção de ocultar os indicadores.
 - Logs separados por sessão e exportação de diagnóstico.
 - Instalação opcional da atualização **1.5 compatível**, em CIA ou RAR, com ativação/desativação reversível e bibliotecas nativas próprias para essa versão.
-- Instalação de **packs de texturas PNG em ZIP no formato Citra/Azahar**, com opção de ativar/desativar.
+- Instalação de **packs de texturas PNG em ZIP no formato Citra/Azahar**, com múltiplos packs, ativação independente e prioridade por pack.
 - Exportação de save em ZIP e importação de ZIP ou arquivo `main`, com backup automático do save anterior.
+
+- Limite de apresentação de 30 FPS (padrão) ou 60 FPS com interpolação experimental, sem acelerar a simulação. O modo experimental pode adicionar cerca de 33 ms de latência visual e apresentar artefatos; ainda precisa de testes no celular.
 
 ## Desempenho
 
@@ -54,6 +56,7 @@ O projeto evoluiu por builds de teste iterativas, com relatos de gameplay e ajus
 - [Arquitetura e proveniência](docs/ARCHITECTURE.md)
 - [Compilação e insumos externos](docs/BUILD.md)
 - [Histórico técnico](docs/ANDROID_DEVELOPMENT_HISTORY.md)
+- [Notas da V0.1.2](docs/RELEASE_v0.1.2.md)
 - [Notas da V0.1.1 Beta](docs/RELEASE_v0.1.1-beta.md)
 - [Notas da V0.1.0 Beta](docs/RELEASE_v0.1.0-beta.md)
 - [Créditos e licenças](THIRD_PARTY_NOTICES.md)

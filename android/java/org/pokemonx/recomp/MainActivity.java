@@ -26,8 +26,10 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
  private static native int nativeEffectiveMode();
  private static native void nativeAutomaticUI(boolean enabled);
  private static native void nativeMoveCards(boolean enabled);
+ private static native void nativeBattleMetadata(boolean enabled);
  static native int[] nativeMapTouch(float x,float y,int width,int height,int mode);
  private static native void nativeRenderer(int mode);
+ private static native void nativeFrameTarget(int fps);
  private static native void nativeConfigure(int internalScale,String driverDirectory,String driverLibrary);
  private static native void nativeInput(int buttons,int cx,int cy,int tx,int ty);
  private static native void nativePause(boolean pause);
@@ -45,22 +47,22 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
  private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
  private SessionLogs sessionLogs;private File launcherLog;private volatile File sessionLog;
  private File log(){return sessionLog!=null?sessionLog:launcherLog;}
- private int versionCode(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionCode;}catch(Exception ignored){return 35;}}
+ private int versionCode(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionCode;}catch(Exception ignored){return 52;}}
  private String logHeader(){return "APK versionCode="+versionCode()+"; Android "+Build.VERSION.RELEASE+" API "+Build.VERSION.SDK_INT+"; "+Build.MANUFACTURER+" "+Build.MODEL+"; PID="+android.os.Process.myPid();}
  private boolean hasGame(){return new File(getFilesDir(),"game.cxi").isFile();}
  private void append(String m){File target=running.get()&&sessionLog!=null?sessionLog:launcherLog;if(target!=null)try{SessionLogs.append(target,m);}catch(IOException error){android.util.Log.e("PokemonX","Cannot write session log",error);}}
  private void toast(String m){Toast.makeText(this,m,Toast.LENGTH_LONG).show();}
  @Override public void onCreate(Bundle state){super.onCreate(state);settings=getSharedPreferences("settings",0);I18n.setLanguage(settings.getString("app_language","pt-BR"));getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);getWindow().getDecorView().setSystemUiVisibility(5894);
   try{sessionLogs=new SessionLogs(getFilesDir());launcherLog=sessionLogs.begin(false,versionCode(),System.currentTimeMillis(),logHeader());sessionLog=sessionLogs.restore(settings.getString("last_session_log",null));}catch(IOException error){message=I18n.t("Falha ao criar logs: ")+I18n.runtime(error.getMessage()==null?error.getClass().getSimpleName():error.getMessage());}
-  append("Build V0.1.1 Beta launcher opened");
-  Thread.UncaughtExceptionHandler previous=Thread.getDefaultUncaughtExceptionHandler();Thread.setDefaultUncaughtExceptionHandler((t,e)->{append(android.util.Log.getStackTraceString(e));if(previous!=null)previous.uncaughtException(t,e);});showLauncher();
+  append("Build V0.1.2 Teste 17 launcher opened");
+  Thread.UncaughtExceptionHandler previous=Thread.getDefaultUncaughtExceptionHandler();Thread.setDefaultUncaughtExceptionHandler((t,e)->{append(android.util.Log.getStackTraceString(e));if(previous!=null)previous.uncaughtException(t,e);});importing=true;showLauncher();new Thread(()->{try{TextureMods.list(getFilesDir());}catch(Exception error){message=I18n.t("Falha: ")+I18n.runtime(error.getMessage());append("Mod recovery failed: "+error);}finally{importing=false;runOnUiThread(this::showLauncher);}},"ModRecovery").start();
  }
  private LinearLayout column(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;}
  private TextView text(String value,int size,int color){TextView t=new TextView(this);t.setText(value);t.setTextSize(size);t.setTextColor(color);t.setPadding(dp(4),dp(4),dp(4),dp(4));return t;}
  private Button button(String label,Runnable action){Button b=new Button(this);b.setText(label);b.setTextSize(13);b.setAllCaps(false);b.setTextColor(Color.WHITE);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff243b56));b.setOnClickListener(v->action.run());return b;}
  private void addButton(LinearLayout parent,String label,Runnable action){Button b=button(label,action);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(47));p.setMargins(0,dp(3),0,dp(3));parent.addView(b,p);if(importing||running.get())b.setEnabled(label.equals(I18n.t("Exportar logs")));}
  private void showLauncher(){stopHud();page="launcher";pendingStart=false;screen=null;surfaceReady=false;nativePause(true);nativeSurface(null);releaseInput();
-  LauncherView home=new LauncherView(this,hasGame(),importing||running.get(),importing?message:running.get()?I18n.t("Encerrando e salvando…"):"", "V0.1.1 Beta",
+  LauncherView home=new LauncherView(this,hasGame(),importing||running.get(),importing?message:running.get()?I18n.t("Encerrando e salvando…"):"", "V0.1.2 Teste 17",
    ()->{if(importing||running.get())return;if(!hasGame()){message=I18n.t("Importe seu arquivo CIA para começar.");showSettings();return;}showGame(true);},
    this::showSettings,()->{if(importing){toast(I18n.t("Aguarde o fim da importação."));return;}nativeStop();finish();});
   status=home.statusView();setContentView(home);
@@ -73,8 +75,10 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
    ui.action(hasGame()?I18n.t("Substituir jogo base"):I18n.t("Importar jogo base"),hasGame()?I18n.t("CIA importado • saves preservados"):I18n.t("Selecione seu arquivo CIA"),!busy,()->pick(7));
    ui.action(UpdateInstaller.installed(this)?I18n.t("Reinstalar atualização 1.5"):I18n.t("Instalar atualização 1.5"),I18n.t("Aceita CIA ou RAR"),!busy&&hasGame(),()->pick(9));
    if(UpdateInstaller.installed(this))ui.toggle(I18n.t("Usar atualização 1.5"),I18n.t("Desative para voltar à versão base. Os saves são mantidos."),UpdateInstaller.enabled(this),on->{try{UpdateInstaller.setEnabled(UpdateInstaller.root(this),on);message=on?I18n.t("Atualização 1.5 ativada."):I18n.t("Versão base ativada.");}catch(Exception error){message=I18n.t("Falha: ")+I18n.runtime(error.getMessage()==null?error.getClass().getSimpleName():error.getMessage());}showSettings();});
-   ui.action(I18n.t("Adicionar mod de texturas"),I18n.t("Pack PNG Citra/Azahar em ZIP • substitui o pack anterior"),!busy,()->pick(10));
-   if(ModInstaller.installed(getFilesDir()))ui.toggle(I18n.t("Ativar mod de texturas"),I18n.t("Aplicado na próxima sessão. Texturas maiores podem usar mais RAM."),settings.getBoolean("texture_mod",true),on->settings.edit().putBoolean("texture_mod",on).apply());
+   ui.action(I18n.t("Adicionar mod de texturas"),I18n.t("Pack PNG Citra/Azahar em ZIP • mantém os outros mods"),!busy,()->pick(10));
+   ui.note(I18n.t("Vários packs podem ficar ativos. Em conflitos, vence o de maior prioridade; novos packs entram no topo."));
+   ui.action(I18n.t("Gerenciar mods de texturas"),I18n.t("Ativar, desativar, remover e escolher prioridade"),!busy,this::manageMods);
+   if(ModInstaller.installed(getFilesDir()))ui.toggle(I18n.t("Ativar mods de texturas"),I18n.t("Aplicado na próxima sessão. Texturas maiores podem usar mais RAM."),settings.getBoolean("texture_mod",true),on->settings.edit().putBoolean("texture_mod",on).apply());
    ui.action(I18n.t("Exportar save"),I18n.t("Salve no menu do jogo antes de exportar"),!busy,()->saveDestination(12));
    ui.action(I18n.t("Importar save"),I18n.t("Backup ZIP ou arquivo main • cria backup do save atual"),!busy,()->pick(11));
    if(SaveManager.latestBackup(getFilesDir())!=null)ui.action(I18n.t("Exportar backup anterior"),I18n.t("Recupere o save preservado antes da última importação"),!busy,()->saveDestination(13));
@@ -84,6 +88,8 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
   }else if(settingsSection==1){
    ui.heading(I18n.t("Imagem e telas"),I18n.t("Renderização Vulkan · alterações salvas automaticamente."));
    ui.choice(I18n.t("Modo de jogo"),new String[]{I18n.t("Uma tela · interface integrada"),I18n.t("Duas telas · lado a lado")},settings.getInt("screen_layout",0),v->{settings.edit().putInt("screen_layout",v).apply();showSettings();});
+   ui.choice(I18n.t("Limite de quadros na tela"),new String[]{I18n.t("30 FPS"),I18n.t("60 FPS · interpolação experimental")},settings.getInt("frame_target",30)==60?1:0,v->{settings.edit().putInt("frame_target",v==1?60:30).apply();showSettings();});
+   ui.note(I18n.t("60 FPS cria quadros intermediários sem acelerar a lógica. Pode causar artefatos e atraso visual. Em cenas pesadas, reduz a interpolação. Aplicado na próxima sessão."));
    int scale=settings.getInt("render_scale",1);ui.choice(I18n.t("Resolução de renderização"),new String[]{"1× · 400 × 240","2× · 800 × 480","3× · 1200 × 720","4× · 1600 × 960",I18n.t("Automática · até 4×")},scale==0?4:scale-1,v->{settings.edit().putInt("render_scale",v==4?0:v+1).remove("output_height").apply();showSettings();});
    ui.note(I18n.t("Escala interna real, mantendo a proporção do 3DS. Resoluções maiores exigem mais da GPU."));
    List<DriverManager.Driver> available=DriverManager.list(this);String[] labels=new String[available.size()+1];labels[0]=I18n.t("Sistema (padrão)");int selected=0;String current=settings.getString("driver_path","");for(int i=0;i<available.size();i++){labels[i+1]=available.get(i).name;if(current.equals(available.get(i).dir.getAbsolutePath()))selected=i+1;}
@@ -93,6 +99,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
    ui.heading(I18n.t("Controles e interface"),I18n.t("Personalize a forma de jogar."));
    ui.toggle(I18n.t("Controles sobre o jogo"),I18n.t("Mantém os botões touch sobre a imagem."),settings.getBoolean("overlay_controls",true),on->settings.edit().putBoolean("overlay_controls",on).apply());
    ui.action(I18n.t("Editar controles"),I18n.t("Arraste os botões e ajuste o tamanho"),!busy,this::showEditor);
+   ui.toggle(I18n.t("Pokémon e golpes — experimental"),I18n.t("Atualização 1.5: dados após usar um golpe. Trocas forçadas ainda em teste."),settings.getBoolean("battle_metadata_test",false),on->settings.edit().putBoolean("battle_metadata_test",on).apply());
    ui.toggle(I18n.t("Interface automática de batalha"),I18n.t("Em uma tela, mostra as opções apenas durante a seleção."),settings.getBoolean("automatic_battle_ui",true),on->settings.edit().putBoolean("automatic_battle_ui",on).apply());
    ui.toggle(I18n.t("Golpes em cartões"),I18n.t("Nomes e detalhes atualizados pelo próprio jogo."),settings.getBoolean("move_cards",true),on->settings.edit().putBoolean("move_cards",on).apply());
    ui.note(I18n.t("X abre o menu original no canto inferior direito. Os controles touch permanecem visíveis durante as batalhas."));
@@ -102,11 +109,22 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
    ui.note(I18n.t("O idioma do jogo é independente desta opção."));
    ui.toggle(I18n.t("Indicadores de desempenho"),I18n.t("FPS, velocidade, RAM do app e temperatura da bateria."),settings.getBoolean("performance_hud",true),on->settings.edit().putBoolean("performance_hud",on).apply());
    ui.action(I18n.t("Exportar logs"),I18n.t("Compartilhe o registro da última sessão"),true,this::exportLog);
-   ui.note(I18n.t("Pokémon X Recomp · V0.1.1 Beta\nNintendo 3DS · Vulkan · Áudio estéreo"));
+   ui.note(I18n.t("Pokémon X Recomp · V0.1.2 Teste 17\nNintendo 3DS · Vulkan · Áudio estéreo"));
   }setContentView(ui);
  }
 
- private void applyConfiguration(){nativeTextures(ModInstaller.installed(getFilesDir())&&settings.getBoolean("texture_mod",true));nativeMoveCards(settings.getBoolean("move_cards",true));nativeAutomaticUI(settings.getBoolean("automatic_battle_ui",true));int renderer=0;nativeRenderer(renderer);String path=settings.getString("driver_path",""),library="";
+ private void modTask(Runnable task){if(importing||running.get())return;importing=true;message=I18n.t("Aplicando mods…");showSettings();new Thread(()->{task.run();importing=false;runOnUiThread(this::showSettings);},"TextureMods").start();}
+ private void manageMods(){if(importing||running.get())return;try{
+  List<TextureMods.Pack> packs=TextureMods.list(getFilesDir());Collections.reverse(packs);String[] labels=new String[packs.size()];for(int i=0;i<packs.size();i++){TextureMods.Pack p=packs.get(i);labels[i]=(i+1)+". "+p.name+" · "+I18n.t(p.enabled?"Ativo":"Desativado")+" · "+p.count;}
+  AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle(I18n.t("Mods • maior prioridade primeiro")).setNegativeButton(I18n.t("Fechar"),null);
+  if(packs.isEmpty())dialog.setMessage(I18n.t("Nenhum mod instalado."));else dialog.setItems(labels,(d,i)->modOptions(packs.get(i)));dialog.show();
+ }catch(Exception error){message=I18n.t("Falha: ")+I18n.runtime(error.getMessage());showSettings();}}
+ private void modOptions(TextureMods.Pack p){new AlertDialog.Builder(this).setTitle(p.name).setItems(new String[]{I18n.t(p.enabled?"Desativar":"Ativar"),I18n.t("Dar maior prioridade"),I18n.t("Remover mod")},(d,action)->{
+  Runnable change=()->modTask(()->{try{TextureMods.change(getFilesDir(),p.id,action);message=I18n.t("Mods atualizados. Aplicados na próxima sessão.");}catch(Exception error){message=I18n.t("Falha: ")+I18n.runtime(error.getMessage());}});
+  if(action==2)new AlertDialog.Builder(this).setTitle(I18n.t("Remover mod")).setMessage(p.name).setNegativeButton(I18n.t("Cancelar"),null).setPositiveButton(I18n.t("Remover mod"),(a,b)->change.run()).show();else change.run();
+ }).setNegativeButton(I18n.t("Cancelar"),null).show();}
+
+ private void applyConfiguration(){nativeFrameTarget(settings.getInt("frame_target",30));nativeBattleMetadata(settings.getBoolean("battle_metadata_test",false));nativeTextures(ModInstaller.installed(getFilesDir())&&settings.getBoolean("texture_mod",true));nativeMoveCards(settings.getBoolean("move_cards",true));nativeAutomaticUI(settings.getBoolean("automatic_battle_ui",true));int renderer=0;nativeRenderer(renderer);String path=settings.getString("driver_path",""),library="";
   if(!path.isEmpty())try{DriverManager.Driver d=DriverManager.read(new File(path));library=d.library;}catch(Exception e){append("Driver selection invalid: "+e);path="";settings.edit().remove("driver_path").apply();}
   nativeConfigure(settings.getInt("render_scale",1),path,library);
  }

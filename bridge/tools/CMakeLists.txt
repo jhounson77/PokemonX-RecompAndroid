@@ -16,3 +16,5 @@ target_include_directories(px-lift-update PRIVATE "${H}")
 target_link_libraries(px-lift-update PRIVATE OpenSSL::Crypto)
 target_compile_options(px-lift-update PRIVATE -O2 -ffunction-sections -fdata-sections)
 target_link_options(px-lift-update PRIVATE -Wl,--gc-sections)
+
+target_sources(px-lift-update PRIVATE "${H}/application/lift_survey.cpp")

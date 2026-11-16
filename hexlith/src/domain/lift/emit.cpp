@@ -146,6 +146,42 @@ std::string InstructionFields(const arm::Instruction& instruction) {
 std::string OperationName(std::uint32_t index) {
     using arm::Operation;
     switch (static_cast<Operation>(index)) {
+    case Operation::Usat:
+        return "Usat";
+    case Operation::Pkhbt:
+        return "Pkhbt";
+    case Operation::Smlad:
+        return "Smlad";
+    case Operation::Uxtb16:
+        return "Uxtb16";
+    case Operation::Rev:
+        return "Rev";
+    case Operation::Usat16:
+        return "Usat16";
+    case Operation::Rev16:
+        return "Rev16";
+    case Operation::Pkhtb:
+        return "Pkhtb";
+    case Operation::Qadd:
+        return "Qadd";
+    case Operation::QdoubleAdd:
+        return "QdoubleAdd";
+    case Operation::Ssat16:
+        return "Ssat16";
+    case Operation::Qsub:
+        return "Qsub";
+    case Operation::Smusd:
+        return "Smusd";
+    case Operation::Smuad:
+        return "Smuad";
+    case Operation::Uxtab16:
+        return "Uxtab16";
+    case Operation::Ssat:
+        return "Ssat";
+    case Operation::ParallelArithmetic:
+        return "ParallelArithmetic";
+    case Operation::Sel:
+        return "Sel";
     case Operation::And:
         return "And";
     case Operation::Eor:
@@ -517,6 +553,15 @@ private:
             break;
         case OpKind::Xor:
             Const(op.destination, "std::uint32_t", std::format("{} ^ {}", a, b));
+            break;
+        case OpKind::CountLeadingZeros:
+            Const(op.destination, "std::uint32_t", std::format("primitives::CountLeadingZeros({})", a));
+            break;
+        case OpKind::ReverseBytes:
+            Const(op.destination, "std::uint32_t", std::format("primitives::ReverseBytes({})", a));
+            break;
+        case OpKind::ReverseBytesInHalves:
+            Const(op.destination, "std::uint32_t", std::format("primitives::ReverseBytesInHalves({})", a));
             break;
         case OpKind::Multiply:
             Const(op.destination, "std::uint32_t", std::format("{} * {}", a, b));

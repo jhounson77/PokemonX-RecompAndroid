@@ -2,6 +2,7 @@
 // Licensed under GPLv2 or any later version
 // Refer to the misc/licenses/gplv2.txt file included.
 
+#include "common/px_host_timings.h"
 #include <span>
 #include <vector>
 #include <boost/serialization/base_object.hpp>
@@ -679,7 +680,12 @@ void GSP_GPU::TriggerCmdReqQueue(Kernel::HLERequestContext& ctx) {
 
         // Decode and execute command
         system.perf_stats->BeginGPUProcessing();
-        gpu.Execute(command);
+        {
+#if defined(PX_PROFILE_HOST_TIMINGS)
+            PokemonXTiming::StageScope stage(PokemonXTiming::CommandStage(static_cast<u32>(command.id.Value())));
+#endif
+            gpu.Execute(command);
+        }
         system.perf_stats->EndGPUProcessing();
 
         if (command.stop) {

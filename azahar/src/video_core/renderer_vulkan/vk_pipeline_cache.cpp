@@ -2,6 +2,7 @@
 // Licensed under GPLv3 or any later version
 // Refer to the LICENSE.txt file included.
 
+#include "common/px_host_timings.h"
 #include <boost/container/static_vector.hpp>
 
 #include "common/common_paths.h"
@@ -384,9 +385,20 @@ bool PipelineCache::BindPipeline(PipelineInfo& info, bool wait_built) {
         info.state.shader_ids[i] = shader_hashes[i];
     }
 
-    GraphicsPipeline* const pipeline = curr_disk_cache->GetPipeline(info);
-    if (!pipeline->IsDone() && !pipeline->TryBuild(wait_built)) {
-        return false;
+    GraphicsPipeline* const pipeline = [&] {
+#if defined(PX_PROFILE_HOST_TIMINGS)
+        PokemonXTiming::StageScope stage(PokemonXTiming::Stage::PipelineLookup);
+#endif
+        return curr_disk_cache->GetPipeline(info);
+    }();
+    if (!pipeline->IsDone()) {
+        const bool built = [&] {
+#if defined(PX_PROFILE_HOST_TIMINGS)
+            PokemonXTiming::StageScope stage(PokemonXTiming::Stage::PipelineTryBuild);
+#endif
+            return pipeline->TryBuild(wait_built);
+        }();
+        if (!built) return false;
     }
 
     const bool is_dirty = scheduler.IsStateDirty(StateFlags::Pipeline);
@@ -494,6 +506,9 @@ bool PipelineCache::BindPipeline(PipelineInfo& info, bool wait_built) {
 
         if (pipeline_dirty) {
             if (!pipeline->IsDone()) {
+#if defined(PX_PROFILE_HOST_TIMINGS)
+                PokemonXTiming::StageScope stage(PokemonXTiming::Stage::PipelineWorkerWait);
+#endif
                 pipeline->WaitDone();
             }
             cmdbuf.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline->Handle());

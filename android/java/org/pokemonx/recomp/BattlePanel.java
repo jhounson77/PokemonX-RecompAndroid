@@ -11,6 +11,7 @@ final class BattlePanel extends View {
  private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
  private final int[] surfacePosition=new int[2],viewPosition=new int[2];
  private final Typeface labelTypeface=Typeface.create("sans-serif-medium",Typeface.NORMAL);
+ private BattleCatalog catalog;
  private int[] moveStats=new int[15],nextStats=new int[15];
  private final String[] labels={I18n.t("Lutar"),I18n.t("Bolsa"),I18n.t("Fugir"),"Pokémon"};
  private static final int[] colors={0xe5b5363c,0xe59c7422,0xe52d6eaa,0xe5378048};
@@ -20,7 +21,7 @@ final class BattlePanel extends View {
  private RectF gestureRect=new RectF();
  private int shownMode=0,pointer=-1,gestureMode=-1,pressed=-1;private boolean validEnd;
  private final Runnable tick=new Runnable(){public void run(){if(isAttachedToWindow()){if(refresh())invalidate();postDelayed(this,((int)regions[0]==3||(int)regions[0]==4)?33:100);}}};
- BattlePanel(MainActivity owner,SurfaceView screen){super(owner);activity=owner;surface=screen;setBackgroundColor(Color.TRANSPARENT);setContentDescription(I18n.t("Comandos de batalha"));setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);}
+ BattlePanel(MainActivity owner,SurfaceView screen){super(owner);activity=owner;surface=screen;try{catalog=BattleCatalog.read(owner.getAssets().open("battle-catalog.tsv"));}catch(java.io.IOException ignored){catalog=null;}setBackgroundColor(Color.TRANSPARENT);setContentDescription(I18n.t("Comandos de batalha"));setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);}
  private boolean refresh(){
   if(surface.getWidth()<=0||surface.getHeight()<=0)return false;
   surface.getLocationInWindow(surfacePosition);getLocationInWindow(viewPosition);
@@ -37,6 +38,9 @@ final class BattlePanel extends View {
  @Override protected void onDraw(Canvas canvas){super.onDraw(canvas);shownMode=(int)regions[0];int count=(int)regions[1];
   if(shownMode!=3&&shownMode!=4)return;
   int focus=pressed>=0?pressed:(regions.length>3+count*6?(int)regions[3+count*6]:0);
+  if(shownMode==4&&moveStats[0]==1&&catalog!=null){String mon=catalog.species(moveStats[2],I18n.languageIndex());
+   if(mon!=null){RectF first=rect(0);paint.setStyle(Paint.Style.FILL);paint.setColor(Color.WHITE);paint.setTextAlign(Paint.Align.RIGHT);paint.setTypeface(labelTypeface);paint.setTextSize(first.height()*.28f);canvas.drawText(mon,rect(1).right,first.top-first.height()*.12f,paint);}
+  }
   for(int i=0;i<count;i++){
    int p=3+i*6;if(regions[p+5]==0)continue;RectF r=rect(i);float radius=r.height()*.14f;
    if(regions[p+4]==0){
@@ -45,6 +49,13 @@ final class BattlePanel extends View {
     paint.setStyle(Paint.Style.FILL);paint.setColor(Color.WHITE);paint.setTypeface(labelTypeface);paint.setTextAlign(Paint.Align.CENTER);paint.setTextSize(Math.min(r.height()*.36f,r.width()*.18f));Paint.FontMetrics fm=paint.getFontMetrics();canvas.drawText(shownMode==3?labels[i]:I18n.t("B · Voltar"),r.centerX(),r.centerY()-(fm.ascent+fm.descent)/2,paint);
    }
    if(shownMode==4&&i<4&&moveStats!=null&&moveStats.length>=15&&moveStats[0]==1){
+    String name=catalog==null?null:catalog.move(moveStats[3+i*3],I18n.languageIndex());
+    if(name!=null){
+     paint.setStyle(Paint.Style.FILL);paint.setColor(0xff173148);canvas.drawRect(r.left,r.top,r.right,r.top+r.height()*.53f,paint);
+     paint.setColor(Color.WHITE);paint.setTypeface(labelTypeface);paint.setTextAlign(Paint.Align.CENTER);paint.setTextSize(r.height()*.31f);
+     float textWidth=paint.measureText(name);if(textWidth>r.width()*.92f)paint.setTextSize(paint.getTextSize()*r.width()*.92f/textWidth);
+     Paint.FontMetrics metrics=paint.getFontMetrics();canvas.drawText(name,r.centerX(),r.top+r.height()*.265f-(metrics.ascent+metrics.descent)/2,paint);
+    }
     int pp=moveStats[4+i*3],max=moveStats[5+i*3];paint.setStyle(Paint.Style.FILL);paint.setColor(pp==0?0xffff8888:Color.WHITE);paint.setTypeface(labelTypeface);paint.setTextAlign(Paint.Align.CENTER);paint.setTextSize(r.height()*.27f);Paint.FontMetrics fm=paint.getFontMetrics();canvas.drawText("PP "+pp+"/"+max,r.left+r.width()*.69f,r.top+r.height()*.72f-(fm.ascent+fm.descent)/2,paint);
    }
    if(i==focus&&i<4){

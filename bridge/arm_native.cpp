@@ -1,4 +1,5 @@
 #include "arm_native.h"
+#include "common/px_host_timings.h"
 
 #include <algorithm>
 #include <cstring>
@@ -28,7 +29,12 @@ void ARMNative::Execute(u64 limit) {
         // Bound return latency without changing emulated time or game speed.
         const auto budget = std::min<u64>(limit, 8192);
         u64 executed = 0;
-        const auto stop = engine.Run(state, guest_memory, budget, executed);
+        const auto stop = [&] {
+#if defined(PX_PROFILE_HOST_TIMINGS)
+            PokemonXTiming::GuestScope timing;
+#endif
+            return engine.Run(state, guest_memory, budget, executed);
+        }();
         GetTimer().AddTicks(executed);
         limit -= std::min(limit, executed);
         if (stop.reason == arm::StopReason::SupervisorCall) {

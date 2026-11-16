@@ -10,7 +10,8 @@ final class ModInstaller {
  static boolean installed(File files){return new File(directory(files),"px-pack.txt").isFile();}
  static String safe(String name)throws IOException{String s=name.replace('\\','/');if(s.startsWith("/")||s.contains(":"))throw new IOException(I18n.t("Caminho inválido no ZIP."));for(String p:s.split("/"))if(p.equals("..")||p.equals("."))throw new IOException(I18n.t("Caminho inválido no ZIP."));return s;}
  static void copy(InputStream in,OutputStream out,long max)throws IOException{byte[]b=new byte[65536];long total=0;int n;while((n=in.read(b))!=-1){total+=n;if(total>max)throw new IOException(I18n.t("Arquivo excede o limite permitido."));out.write(b,0,n);}}
- static int install(File zip,File files,String label)throws Exception{
+ static int install(File zip,File files,String label)throws Exception{return TextureMods.add(zip,files,label);}
+ static int extract(File zip,File files,String label)throws Exception{
   File target=directory(files),parent=target.getParentFile();if(!parent.isDirectory()&&!parent.mkdirs())throw new IOException(I18n.t("Falha ao criar pasta de mods."));
   File stage=new File(parent,".stage-"+UUID.randomUUID()),backup=new File(parent,".previous-"+UUID.randomUUID());stage.mkdir();int count=0,entries=0;long total=0;Set<String>names=new HashSet<>();boolean committed=false;
   try(ZipInputStream in=new ZipInputStream(new FileInputStream(zip))){ZipEntry e;while((e=in.getNextEntry())!=null){if(++entries>10000)throw new IOException(I18n.t("Muitos arquivos no pacote."));String path=safe(e.getName());if(e.isDirectory())continue;String name=path.substring(path.lastIndexOf('/')+1);

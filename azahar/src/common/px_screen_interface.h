@@ -12,6 +12,11 @@ namespace PokemonXUI {
 // 0 main,1 dual,2 bottom,3 battle commands,4 battle moves,5 original menu panel.
 inline std::atomic<int> mode{0};
 inline std::atomic<unsigned> generation{0};
+inline std::atomic<unsigned> battle_actor_epoch{0};
+inline std::atomic<std::uint64_t> battle_move_event{0};
+inline std::atomic<bool> metadata_overlay{false};
+inline void SignalBattleMove(int slot){auto previous=battle_move_event.load();while(!battle_move_event.compare_exchange_weak(previous,((previous&~std::uint64_t{7})+8)|std::uint64_t(slot))){} }
+
 inline std::atomic<bool> battle_menu_full{false},battle_menu_exit{false};
 inline std::atomic<bool> move_cards{true},native_pp_trusted{false};
 inline std::atomic<bool> automatic{true},battle_loaded{false},submenu_loaded{false};
@@ -21,7 +26,7 @@ inline std::atomic<bool> decision_hidden{false},saw_execution{false},popup_reque
 inline std::atomic<int> committed_scene{0},popup_return{0},move_slots{15};
 inline void Commit(int profile,int index);
 inline void Observe(int detected){scene=detected;if(decision_hidden){if(detected==0)saw_execution=true;if(detected==3&&(saw_execution||committed_scene==4))decision_hidden=false;}}
-inline void OpenPopup(){++generation;if(!popup_requested){popup_return=mode.load()==5?0:mode.load();popup_seen_menu=false;popup_close_requested=false;}popup_requested=true;mode=5;force_probe=true;}
+inline void OpenPopup(){++battle_actor_epoch;++generation;if(!popup_requested){popup_return=mode.load()==5?0:mode.load();popup_seen_menu=false;popup_close_requested=false;}popup_requested=true;mode=5;force_probe=true;}
 inline void ClosePopup(){++generation;battle_menu_exit=false;battle_menu_full=false;mode=popup_return.load();popup_requested=false;popup_seen_menu=false;popup_close_requested=false;force_probe=true;}
 inline int Effective(int selected){if(selected!=0||!automatic||!battle_loaded)return selected;return decision_hidden?0:scene.load();}
 
@@ -29,6 +34,7 @@ inline int Effective(int selected){if(selected!=0||!automatic||!battle_loaded)re
 // avoids depending on an invisible guest cursor after recomposing the menu.
 inline std::atomic<int> command_focus{0};
 inline void Commit(int profile,int index){
+ if(profile==4&&index>=0&&index<4)SignalBattleMove(index);
  ++generation;
  if((profile==3||profile==4)&&index>=0&&index<4)command_focus=index;
  if((profile==3&&index==0)||(profile==4&&index==4)){if(mode==0)scene=0;force_probe=true;return;}
@@ -108,7 +114,7 @@ struct CommandSignature {
  static auto Read(const std::uint8_t* p,int w,int h){std::array<unsigned char,300> a{};for(int y=0;y<15;y++)for(int x=0;x<20;x++)a[y*20+x]=Color(p+((y*h/15)*w+x*w/20)*4);return a;}
  void Learn(const std::uint8_t* p,int w,int h){cells=Read(p,w,h);valid=true;return_streak=0;}
  bool Matches(const std::uint8_t* p,int w,int h)const{if(!valid)return false;auto a=Read(p,w,h);int different=0;for(int i=0;i<300;i++)different+=a[i]!=cells[i];return different<=36;}
- bool Return(int detected,const std::uint8_t* p,int w,int h,bool seen){if(seen&&detected==3&&Matches(p,w,h))return ++return_streak>=2;return_streak=0;return false;}
+ bool Return(int detected,const std::uint8_t* p,int w,int h,bool seen,bool close_requested=false){if((seen||close_requested)&&detected==3&&Matches(p,w,h))return ++return_streak>=2;return_streak=0;return false;}
 };
 
 inline bool IsPSS(const std::uint8_t* p,int w,int h){

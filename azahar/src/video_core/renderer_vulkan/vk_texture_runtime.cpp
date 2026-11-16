@@ -10,6 +10,7 @@
 #include <boost/container/small_vector.hpp>
 #include <boost/container/static_vector.hpp>
 #include <vulkan/vulkan.hpp>
+#include "common/px_host_timings.h"
 #include "video_core/custom_textures/custom_tex_manager.h"
 #include "video_core/rasterizer_cache/pixel_format.h"
 #include "video_core/rasterizer_cache/surface_params.h"
@@ -1029,8 +1030,14 @@ void Surface::UploadCustom(const VideoCore::Material* material, u32 level) {
 void Surface::Download(const VideoCore::BufferTextureCopy& download,
                        const VideoCore::StagingData& staging) {
     SCOPE_EXIT({
+#if defined(PX_PROFILE_HOST_TIMINGS)
+        const auto sync_start = PokemonXTiming::Clock::now();
+#endif
         scheduler.Finish();
         runtime.download_buffer.Commit(staging.size);
+#if defined(PX_PROFILE_HOST_TIMINGS)
+        PokemonXTiming::RecordReadback(PokemonXTiming::Elapsed(sync_start), staging.size, res_scale != 1);
+#endif
     });
 
     runtime.renderpass_cache.EndRendering();

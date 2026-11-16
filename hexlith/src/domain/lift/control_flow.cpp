@@ -84,6 +84,9 @@ public:
             work_.pop_back();
             Scan(address);
         }
+        for (const auto pc : context_.resume_points) {
+            if (instructions_.contains(pc)) leaders_.insert(pc);
+        }
         return Assemble();
     }
 

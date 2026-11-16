@@ -6,6 +6,31 @@ final class I18n {
  private static volatile int language=0;
  private static final Map<String,String[]> translations=new LinkedHashMap<>();
  static {
+  translations.put("Limite de quadros na tela",new String[]{"Display frame limit","Límite de cuadros en pantalla","Limite d’images affichées"});
+  translations.put("30 FPS",new String[]{"30 FPS","30 FPS","30 FPS"});
+  translations.put("60 FPS · interpolação experimental",new String[]{"60 FPS · experimental interpolation","60 FPS · interpolación experimental","60 FPS · interpolation expérimentale"});
+  translations.put("60 FPS cria quadros intermediários sem acelerar a lógica. Pode causar artefatos e atraso visual. Em cenas pesadas, reduz a interpolação. Aplicado na próxima sessão.",new String[]{"60 FPS generates intermediate frames without speeding up game logic. Artifacts and visual delay are possible. Heavy scenes reduce interpolation. Applied next session.","60 FPS genera cuadros intermedios sin acelerar la lógica. Puede causar artefactos y retraso visual. En escenas exigentes reduce la interpolación. Se aplica en la próxima sesión.","60 FPS génère des images intermédiaires sans accélérer la logique. Artefacts et retard visuel possibles. Réduit l’interpolation dans les scènes lourdes. Appliqué à la prochaine session."});
+  translations.put("Jogo ",new String[]{"Game ","Juego ","Jeu "});
+  translations.put(" · Tela ",new String[]{" · Display "," · Pantalla "," · Écran "});
+
+  translations.put("Pack PNG Citra/Azahar em ZIP • mantém os outros mods",new String[]{"Citra/Azahar PNG ZIP pack • keeps other mods","Pack PNG Citra/Azahar en ZIP • conserva los otros mods","Pack PNG Citra/Azahar ZIP • conserve les autres mods"});
+  translations.put("Gerenciar mods de texturas",new String[]{"Manage texture mods","Gestionar mods de texturas","Gérer les mods de textures"});
+  translations.put("Ativar, desativar, remover e escolher prioridade",new String[]{"Enable, disable, remove and set priority","Activar, desactivar, eliminar y elegir prioridad","Activer, désactiver, supprimer et choisir la priorité"});
+  translations.put("Ativar mods de texturas",new String[]{"Enable texture mods","Activar mods de texturas","Activer les mods de textures"});
+  translations.put("Vários packs podem ficar ativos. Em conflitos, vence o de maior prioridade; novos packs entram no topo.",new String[]{"Multiple packs can be active. Higher priority wins conflicts; new packs start at the top.","Varios packs pueden estar activos. En conflictos gana el de mayor prioridad; los nuevos empiezan arriba.","Plusieurs packs peuvent être actifs. La priorité la plus haute gagne les conflits ; les nouveaux packs commencent en haut."});
+  translations.put("Aplicando mods…",new String[]{"Applying mods…","Aplicando mods…","Application des mods…"});
+  translations.put("Ativo",new String[]{"Enabled","Activo","Activé"});
+  translations.put("Desativado",new String[]{"Disabled","Desactivado","Désactivé"});
+  translations.put("Mods • maior prioridade primeiro",new String[]{"Mods • highest priority first","Mods • mayor prioridad primero","Mods • priorité la plus haute en premier"});
+  translations.put("Nenhum mod instalado.",new String[]{"No mods installed.","Ningún mod instalado.","Aucun mod installé."});
+  translations.put("Desativar",new String[]{"Disable","Desactivar","Désactiver"});
+  translations.put("Ativar",new String[]{"Enable","Activar","Activer"});
+  translations.put("Dar maior prioridade",new String[]{"Set highest priority","Dar mayor prioridad","Donner la priorité maximale"});
+  translations.put("Remover mod",new String[]{"Remove mod","Eliminar mod","Supprimer le mod"});
+  translations.put("Mods atualizados. Aplicados na próxima sessão.",new String[]{"Mods updated. Applied next session.","Mods actualizados. Se aplican en la próxima sesión.","Mods mis à jour. Appliqués à la prochaine session."});
+
+  translations.put("Pokémon e golpes — experimental",new String[]{"Pokémon and moves — experimental","Pokémon y movimientos — experimental","Pokémon et capacités — expérimental"});
+  translations.put("Atualização 1.5: dados após usar um golpe. Trocas forçadas ainda em teste.",new String[]{"Update 1.5: data after using a move. Forced switches are still under test.","Versión 1.5: datos tras usar un movimiento. Cambios forzados en prueba.","Version 1.5 : données après une capacité. Changements forcés en test."});
   translations.put("Diretório de logs indisponível",new String[]{"Log directory unavailable","Carpeta de registros no disponible","Dossier des journaux indisponible"});
   translations.put("Jogar",new String[]{"Play","Jugar","Jouer"});
   translations.put("Configurações",new String[]{"Settings","Configuración","Paramètres"});
@@ -234,7 +259,7 @@ final class I18n {
   translations.put("O driver precisa ser ELF ARM64.",new String[]{"Driver must be an ARM64 ELF file.","El controlador debe ser un archivo ELF ARM64.","Le pilote doit être un fichier ELF ARM64."});
   translations.put("Biblioteca do driver não encontrada.",new String[]{"Driver library not found.","Biblioteca del controlador no encontrada.","Bibliothèque du pilote introuvable."});
   translations.put("libraryName inválido.",new String[]{"Invalid libraryName.","libraryName inválido.","libraryName invalide."});
-  translations.put("Pokémon X Recomp · V0.1.1 Beta\nNintendo 3DS · Vulkan · Áudio estéreo",new String[]{"Pokémon X Recomp · V0.1.1 Beta\nNintendo 3DS · Vulkan · Stereo audio","Pokémon X Recomp · V0.1.1 Beta\nNintendo 3DS · Vulkan · Audio estéreo","Pokémon X Recomp · V0.1.1 Beta\nNintendo 3DS · Vulkan · Audio stéréo"});
+  translations.put("Pokémon X Recomp · V0.1.2 Teste 17\nNintendo 3DS · Vulkan · Áudio estéreo",new String[]{"Pokémon X Recomp · V0.1.2 Teste 17\nNintendo 3DS · Vulkan · Stereo audio","Pokémon X Recomp · V0.1.2 Teste 17\nNintendo 3DS · Vulkan · Audio estéreo","Pokémon X Recomp · V0.1.2 Teste 17\nNintendo 3DS · Vulkan · Audio stéréo"});
  }
  static void setLanguage(String tag){int next=0;for(int i=0;i<TAGS.length;i++)if(TAGS[i].equals(tag))next=i;language=next;}
  static int languageIndex(){return language;}

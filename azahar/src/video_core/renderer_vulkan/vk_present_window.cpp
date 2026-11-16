@@ -1,3 +1,4 @@
+#include <stdexcept>
 // Copyright 2023-2026 Citra Emulator Project / Azahar Emulator Project
 // Licensed under GPLv2 or any later version
 // Refer to the misc/licenses/gplv2.txt file included.
@@ -173,7 +174,7 @@ PresentWindow::~PresentWindow() {
     }
 }
 
-void PresentWindow::RecreateFrame(Frame* frame, u32 width, u32 height) {
+void PresentWindow::RecreateFrame(Frame* frame, u32 width, u32 height, bool sampled) {
     vk::Device device = instance.GetDevice();
     if (frame->framebuffer) {
         device.destroyFramebuffer(frame->framebuffer);
@@ -193,7 +194,8 @@ void PresentWindow::RecreateFrame(Frame* frame, u32 width, u32 height) {
         .mipLevels = 1,
         .arrayLayers = 1,
         .samples = vk::SampleCountFlagBits::e1,
-        .usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc,
+        .usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc |
+                 (sampled ? vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst : vk::ImageUsageFlags{}),
     };
 
     const VmaAllocationCreateInfo alloc_info = {
@@ -211,6 +213,7 @@ void PresentWindow::RecreateFrame(Frame* frame, u32 width, u32 height) {
     VkResult result = vmaCreateImage(instance.GetAllocator(), &unsafe_image_info, &alloc_info,
                                      &unsafe_image, &frame->allocation, nullptr);
     if (result != VK_SUCCESS) [[unlikely]] {
+        if(sampled)throw std::runtime_error("Frame interpolation image allocation failed");
         LOG_CRITICAL(Render_Vulkan, "Failed allocating texture with error {}", result);
         UNREACHABLE();
     }

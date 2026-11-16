@@ -1,0 +1,25 @@
+# Test13 main and Title native coverage
+
+Private0.1.2-test13/code48. Device FPS and correctness still require phone confirmation. No100percent-native or100percent-speed claim, and no GitHub writes before explicit authorization.
+
+## Evidence
+
+Test12/code47 still ended near18FPS/61percent speed. Its bounded PC sketch records actual addresses but has large count/error bounds; it supports address presence, not a reliable hot-function ranking. The log contains19 distinct ARM PCs in main and35 in Title. Title's loader base is006A9000. The supplied main decompressed code hashes to7dc08ac5e2a87adabc31c304e1dfa3120a598ef072441983d09c96768cf67e74; Title's code segment hashes to212346daff6b71cf6077d8223c232908fdeba49eac7a832b2bdac356bc9df073. Both match the existing version guards.
+
+Only2 of the19 main PCs were reached by the prior analyzed functions. The canonical control-flow builder is now seeded at additional observed ARM addresses until all19 are reached. This needs11 new observed seeds, not necessarily source-level function boundaries. A small native main supplement emits13 lifted units (2 retained analyzed units plus11 seeds),54 entries and318 aggregate instructions. It preserves the full known main function table as control-flow boundaries while emitting only the selected subset. Calls to original functions outside that subset use runtime dispatch; no hidden original symbols are assumed exported.
+
+Title adds2 observed seeds, retaining all original analyzed functions. Functions558->560; aggregate decoded instructions21895->23300. Combined old and current observed Title offsets58/58 are registered. Unique Title entries3669->3712,43 additions. Main supplement contributes41 previously missing entries;13 overlapping entries preserve their original functions. Main table entries226573->226614. Static counts do not establish runtime coverage or FPS gains.
+
+## Loader and build
+
+New libpxresume15.so uses the standard main-library manifest and registration ABI. LiftedLibrary::AddMissingFrom verifies matching code/lifter identity and invokes registration into the existing primary table. EntryTable::Add keeps the first function for a key; existing pointers are not replaced. Program retains ownership of the supplemental library while CPU cores can use its entries. Merge happens before core construction. The overlay is requested only for the verified update1.5 path and is independently hash/version checked. Base-game loading does not request it. Runtime Context, CPU state and EntryTable layouts do not change.
+
+The original main binary remains byte-identical. Only the host and Title supplement are replaced, one main supplement is added, and nine existing libraries remain identical toTest12. APK packaging must set PX_MAIN_RESUME_LIBRARY or reuse an APK containing it when update1.5 libraries are present. Stage libraries are cleared before reuse to avoid stale additions. android/resume-aot builds the supplement with the pinned Android26/NDKr27c toolchain, host linkage, no undefined symbols and16KiB alignment. The phone does not compile this code.
+
+Code generation adds optional main resume_points and known_functions inputs; default callers retain normal behavior. --emit-resume-main selects reached functions and adds only validated observed ARM seeds, retaining the complete boundary table. --emit-observed-module retains all existing module functions and adds observed seeds. Private inputs, generated game C++ and observed offsets stay in the checkpoint. Required GPU waits, guest instruction budgets, resolution and frame production are preserved. CPU/graphics diagnostics and the selected-run PC sketch remain enabled as inTest12.
+
+## Validation and limits
+
+1620 compiled before/after/interpreter comparisons exercise the actual library loader and merge API: matching and wrong hashes, original pointer preservation, repeated merge, interior resume, calling a hidden original function through dispatch, budgets0..80, SVC, write faults, register/flag/floating state and full mapped page comparison. A targeted one-instruction resume changes engine fallback1->0 with identical state/count. The prior10100 continuation comparisons also pass. Real-source audits retain every original Title entry, register all19 main and all58 Title observed addresses, and calculate main additions against the retained226573-entry source. Menu cancellation/lifecycle and shader-preparation regressions pass; signed package/import/JNI/alignment/source checks remain required.
+
+These are synthetic and static checks, not a full-game compatibility or performance result. More unobserved paths, generic handlers inside AOT and runtime bailouts remain possible. Existing restrictions on executable patching still apply. Preserve the same4x scale, driver and PNG textures, install overTest12 without CIA reimport, capture the slow intro for about60seconds, then export the log. Inspect the startup Supplemental main entries message (41 expected), speed, fallback deltas and any stop/error before making a performance claim.

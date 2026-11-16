@@ -99,6 +99,11 @@ enum class OpKind : std::uint8_t {
     Xor,       // destination <- a ^ b
     Multiply,  // destination <- a * b, the low 32 bits
 
+    // Unary integer operations; do not change flags or memory.
+    CountLeadingZeros,
+    ReverseBytes,
+    ReverseBytesInHalves,
+
     // Comparisons, giving a bit.
     Equal,     // destination <- a == b
     NotEqual,  // destination <- a != b

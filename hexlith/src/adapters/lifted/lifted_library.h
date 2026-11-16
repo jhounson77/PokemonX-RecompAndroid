@@ -35,6 +35,11 @@ public:
 
     [[nodiscard]] const domain::lift::runtime::EntryTable& Entries() const;
 
+    // Fill only missing entries from another already verified library for the
+    // same code/lifter identity. Keep the supplement alive while using this
+    // table; its function pointers still belong to that shared library.
+    core::Status AddMissingFrom(const LiftedLibrary& supplement);
+
     // What the library says it holds, as its manifest function answered.
     [[nodiscard]] const std::string& Manifest() const {
         return manifest_;

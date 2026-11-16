@@ -34,6 +34,12 @@ std::string_view Name(OpKind kind) {
         return "or";
     case OpKind::Xor:
         return "xor";
+    case OpKind::CountLeadingZeros:
+        return "count-leading-zeros";
+    case OpKind::ReverseBytes:
+        return "reverse-bytes";
+    case OpKind::ReverseBytesInHalves:
+        return "reverse-bytes-in-halves";
     case OpKind::Multiply:
         return "multiply";
     case OpKind::Equal:

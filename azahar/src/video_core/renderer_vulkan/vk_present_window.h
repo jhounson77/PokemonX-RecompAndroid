@@ -47,7 +47,7 @@ public:
     Frame* GetRenderFrame();
 
     /// Recreates the render frame to match provided parameters.
-    void RecreateFrame(Frame* frame, u32 width, u32 height);
+    void RecreateFrame(Frame* frame, u32 width, u32 height, bool sampled=false);
 
     /// Queues the provided frame for presentation.
     void Present(Frame* frame);

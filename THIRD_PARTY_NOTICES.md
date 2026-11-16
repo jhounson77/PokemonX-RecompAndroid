@@ -84,3 +84,7 @@ RAR extraction for the local update installer uses libarchive, tagv3.8.11
 The BSD license and upstream notices are retained in
 azahar/externals/libarchive/COPYING and the bundled source archive.
 No archive pathname is used as an output path; only the CIA payload is extracted.
+
+## Experimental battle name catalog
+
+`android/assets/battle-catalog.tsv` maps live species/move IDs to localized names from PokeAPI/pokeapi, `data/v2/csv/pokemon_species_names.csv` and `move_names.csv`, fetched 2026-11-13. This is a local lookup table, not an online service. Unknown IDs keep original game-rendered fields. Portuguese uses English move names. Dynamic move types and forms are not inferred from this name catalog.

@@ -32,10 +32,11 @@ for s,prefix in [(old,'old'),(new,'now')]:
  for name in ['nativeBattleRegions','nativeMoveStats']:
   code+=pick(s,name).replace('Java_org_pokemonx_recomp_MainActivity_'+name,prefix+name)+'\n'
 code+=r'''
-int main(){JNIEnv env;std::vector<float>out(34);std::vector<int>stats(15);PokemonXUI::automatic=false;
+int main(){JNIEnv env;std::vector<float>out(34);std::vector<int>stats(15);PokemonXUI::automatic=false;PokemonXUI::metadata_overlay=true;
  for(int m=0;m<6;m++){mode=m;auto*previous=oldnativeBattleRegions(&env,0,1920,1080);nownativeBattleRegions(&env,0,1920,1080,&out);assert(std::equal(previous->begin(),previous->end(),out.begin()));for(unsigned i=previous->size();i<out.size();i++)assert(out[i]==0);delete previous;}
  nownativeBattleRegions(&env,0,400,240,nullptr);std::vector<float>shortBuffer(3);nownativeBattleRegions(&env,0,400,240,&shortBuffer);assert(shortBuffer[0]==0);
  for(bool enabled:{false,true}){PokemonXUI::move_cards=enabled;auto*p=oldnativeMoveStats(&env,0);nownativeMoveStats(&env,0,&stats);assert(*p==stats);delete p;}
+ PokemonXUI::metadata_overlay=false;nownativeMoveStats(&env,0,&stats);assert(stats[0]==0&&stats[2]==25);
  mode=3;unsigned long begin=allocations;for(int i=0;i<10000;i++){auto*p=oldnativeBattleRegions(&env,0,1920,1080);delete p;}auto before=allocations-begin;begin=allocations;for(int i=0;i<10000;i++)nownativeBattleRegions(&env,0,1920,1080,&out);auto after=allocations-begin;assert(before>0&&after==0);
  std::cout<<"PASS production JNI geometry/focus/stats byte-equivalence, empty tail, short/null bounds; 10000 region polls allocations before="<<before<<" after="<<after<<" (host allocation count, not phone FPS)\n";
 }

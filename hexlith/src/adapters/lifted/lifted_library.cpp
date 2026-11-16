@@ -63,6 +63,20 @@ LiftedLibrary::Open(const std::filesystem::path& path, std::string_view expected
     return library;
 }
 
+core::Status LiftedLibrary::AddMissingFrom(const LiftedLibrary& supplement) {
+    const auto identity = [](const std::string& manifest) {
+        return manifest.substr(0, manifest.find(' ', manifest.find("code=")));
+    };
+    if (identity(manifest_) != identity(supplement.manifest_)) {
+        return core::Error{"native supplement code/lifter identity differs"};
+    }
+    const auto fill = Symbol<RegisterFunction>(supplement.handle_, application::RegisterSymbol);
+    if (fill == nullptr) return core::Error{"native supplement has no registration function"};
+    // EntryTable::Add preserves the first function for ARM and Thumb keys.
+    fill(entries_.get());
+    return {};
+}
+
 LiftedLibrary::~LiftedLibrary() {
     if (handle_ != nullptr) {
         dlclose(handle_);

@@ -7,17 +7,38 @@
 namespace PokemonX {
 namespace { std::shared_ptr<Program> current; }
 std::shared_ptr<Program> Program::FromEntries(hexlith::domain::lift::runtime::EntryTable entries) { auto p=std::make_shared<Program>();p->embedded_=std::move(entries);return p; }
-void SetProgram(std::shared_ptr<Program> p) { PokemonXUI::battle_loaded=false;PokemonXUI::submenu_loaded=false;PokemonXUI::battle_menu_exit=false;PokemonXUI::scene=0;PokemonXUI::decision_hidden=false;PokemonXUI::popup_requested=false;PokemonXUI::battle_menu_full=false;++PokemonXUI::generation;current = std::move(p); }
+void SetProgram(std::shared_ptr<Program> p) { ++PokemonXUI::battle_actor_epoch; PokemonXUI::battle_loaded=false;PokemonXUI::submenu_loaded=false;PokemonXUI::battle_menu_exit=false;PokemonXUI::scene=0;PokemonXUI::decision_hidden=false;PokemonXUI::popup_requested=false;PokemonXUI::battle_menu_full=false;++PokemonXUI::generation;current = std::move(p); }
 std::shared_ptr<Program> GetProgram() { return current; }
 std::shared_ptr<Program> Program::Load(const std::string& main, const std::string& modules,
-                                     const std::string& digest) {
+                                     const std::string& digest, const std::string& supplemental_modules,
+                                     const std::string& supplemental_main) {
     auto p = std::make_shared<Program>();
     auto m = hexlith::adapters::lifted::LiftedLibrary::Open(main, digest);
     if (!m) throw std::runtime_error(m.Failure().Message());
     p->main_ = std::move(m.Value());p->expected_digest_=digest;
+    if (!supplemental_main.empty()) {
+        if (!p->IsUpdate15()) throw std::runtime_error("main continuation supplement requires verified update1.5");
+        auto extra = hexlith::adapters::lifted::LiftedLibrary::Open(supplemental_main, digest);
+        if (!extra) throw std::runtime_error(extra.Failure().Message());
+        p->main_resume_ = std::move(extra.Value());
+        const auto before = p->main_->Entries().Size();
+        auto added = p->main_->AddMissingFrom(*p->main_resume_);
+        if (!added) throw std::runtime_error(added.Failure().Message());
+        LOG_INFO(Core_ARM11, "Supplemental main entries: {} added; original entries retained", p->main_->Entries().Size() - before);
+    }
     auto c = hexlith::adapters::lifted::ModulesLibrary::Open(modules);
     if (!c) throw std::runtime_error(c.Failure().Message());
-    p->modules_ = std::move(c.Value()); p->modules_->OfferTo(p->loaded_);
+    p->modules_ = std::move(c.Value());
+    if (!supplemental_modules.empty()) {
+        auto extra = hexlith::adapters::lifted::ModulesLibrary::Open(supplemental_modules);
+        if (!extra) throw std::runtime_error(extra.Failure().Message());
+        p->supplemental_ = std::move(extra.Value());
+        // LoadedModules chooses the first offer. The rebuilt table replaces
+        // this module while retaining the original library for all others.
+        p->supplemental_->OfferTo(p->loaded_);
+        LOG_INFO(Core_ARM11, "Supplemental native tables: {} module(s)", p->supplemental_->Count());
+    }
+    p->modules_->OfferTo(p->loaded_);
     LOG_INFO(Core_ARM11, "Pokemon X native tables: main and {} modules", p->modules_->Count());
     return p;
 }
@@ -36,14 +57,15 @@ ModuleImage Program::Inspect(std::span<const std::uint8_t> bytes) const {
 }
 void Program::Loaded(const ModuleImage& image, std::uint32_t base) {
     if (image.name.empty()) return;
-    if(image.name=="DllBattle"){++PokemonXUI::generation;submenu_bases_.clear();PokemonXUI::submenu_loaded=false;PokemonXUI::decision_hidden=false;PokemonXUI::scene=0;PokemonXUI::battle_loaded=true;}
+    if(image.name=="DllBattle"){++PokemonXUI::battle_actor_epoch;++PokemonXUI::generation;submenu_bases_.clear();PokemonXUI::submenu_loaded=false;PokemonXUI::decision_hidden=false;PokemonXUI::scene=0;PokemonXUI::battle_loaded=true;}
     if(image.name=="DllField"){++PokemonXUI::generation;if(PokemonXUI::battle_menu_full)PokemonXUI::ClosePopup();submenu_bases_.clear();PokemonXUI::submenu_loaded=false;PokemonXUI::decision_hidden=false;PokemonXUI::battle_loaded=false;PokemonXUI::scene=0;}
-    if(PokemonXUI::battle_loaded&&(image.name=="DllBag"||image.name=="DllPokeList"||image.name=="DllPokeViewer"||image.name=="DllBattlePartySelect"||image.name=="DllPoke3Select")){submenu_bases_.insert(base);PokemonXUI::submenu_loaded=true;PokemonXUI::battle_menu_exit=false;}
+    if(PokemonXUI::battle_loaded&&(image.name=="DllBag"||image.name=="DllPokeList"||image.name=="DllPokeViewer"||image.name=="DllBattlePartySelect"||image.name=="DllPoke3Select")){++PokemonXUI::battle_actor_epoch;submenu_bases_.insert(base);PokemonXUI::submenu_loaded=true;PokemonXUI::battle_menu_exit=false;}
     const auto result = loaded_.Loaded(image.name,base,image.offset,image.size,image.digest);
     LOG_INFO(Core_ARM11, "CRO {} at {:08X}: native binding outcome {}",image.name,base,result==hexlith::domain::lift::runtime::LoadedModules::Outcome::Lifted?"native AOT":result==hexlith::domain::lift::runtime::LoadedModules::Outcome::DigestDiffers?"interpreter (digest differs)":"interpreter (no table)");
 }
 void Program::Unloaded(const std::string& name, std::uint32_t base) {
     if (name == "DllBattle") {
+        ++PokemonXUI::battle_actor_epoch;
         ++PokemonXUI::generation;
         if (PokemonXUI::battle_menu_full) PokemonXUI::ClosePopup();
         submenu_bases_.clear();

@@ -1,0 +1,1342 @@
+P	1	Bulbasaur	Bulbasaur	Bulbizarre
+P	2	Ivysaur	Ivysaur	Herbizarre
+P	3	Venusaur	Venusaur	Florizarre
+P	4	Charmander	Charmander	Salamèche
+P	5	Charmeleon	Charmeleon	Reptincel
+P	6	Charizard	Charizard	Dracaufeu
+P	7	Squirtle	Squirtle	Carapuce
+P	8	Wartortle	Wartortle	Carabaffe
+P	9	Blastoise	Blastoise	Tortank
+P	10	Caterpie	Caterpie	Chenipan
+P	11	Metapod	Metapod	Chrysacier
+P	12	Butterfree	Butterfree	Papilusion
+P	13	Weedle	Weedle	Aspicot
+P	14	Kakuna	Kakuna	Coconfort
+P	15	Beedrill	Beedrill	Dardargnan
+P	16	Pidgey	Pidgey	Roucool
+P	17	Pidgeotto	Pidgeotto	Roucoups
+P	18	Pidgeot	Pidgeot	Roucarnage
+P	19	Rattata	Rattata	Rattata
+P	20	Raticate	Raticate	Rattatac
+P	21	Spearow	Spearow	Piafabec
+P	22	Fearow	Fearow	Rapasdepic
+P	23	Ekans	Ekans	Abo
+P	24	Arbok	Arbok	Arbok
+P	25	Pikachu	Pikachu	Pikachu
+P	26	Raichu	Raichu	Raichu
+P	27	Sandshrew	Sandshrew	Sabelette
+P	28	Sandslash	Sandslash	Sablaireau
+P	29	Nidoran♀	Nidoran♀	Nidoran♀
+P	30	Nidorina	Nidorina	Nidorina
+P	31	Nidoqueen	Nidoqueen	Nidoqueen
+P	32	Nidoran♂	Nidoran♂	Nidoran♂
+P	33	Nidorino	Nidorino	Nidorino
+P	34	Nidoking	Nidoking	Nidoking
+P	35	Clefairy	Clefairy	Mélofée
+P	36	Clefable	Clefable	Mélodelfe
+P	37	Vulpix	Vulpix	Goupix
+P	38	Ninetales	Ninetales	Feunard
+P	39	Jigglypuff	Jigglypuff	Rondoudou
+P	40	Wigglytuff	Wigglytuff	Grodoudou
+P	41	Zubat	Zubat	Nosferapti
+P	42	Golbat	Golbat	Nosferalto
+P	43	Oddish	Oddish	Mystherbe
+P	44	Gloom	Gloom	Ortide
+P	45	Vileplume	Vileplume	Rafflesia
+P	46	Paras	Paras	Paras
+P	47	Parasect	Parasect	Parasect
+P	48	Venonat	Venonat	Mimitoss
+P	49	Venomoth	Venomoth	Aéromite
+P	50	Diglett	Diglett	Taupiqueur
+P	51	Dugtrio	Dugtrio	Triopikeur
+P	52	Meowth	Meowth	Miaouss
+P	53	Persian	Persian	Persian
+P	54	Psyduck	Psyduck	Psykokwak
+P	55	Golduck	Golduck	Akwakwak
+P	56	Mankey	Mankey	Férosinge
+P	57	Primeape	Primeape	Colossinge
+P	58	Growlithe	Growlithe	Caninos
+P	59	Arcanine	Arcanine	Arcanin
+P	60	Poliwag	Poliwag	Ptitard
+P	61	Poliwhirl	Poliwhirl	Têtarte
+P	62	Poliwrath	Poliwrath	Tartard
+P	63	Abra	Abra	Abra
+P	64	Kadabra	Kadabra	Kadabra
+P	65	Alakazam	Alakazam	Alakazam
+P	66	Machop	Machop	Machoc
+P	67	Machoke	Machoke	Machopeur
+P	68	Machamp	Machamp	Mackogneur
+P	69	Bellsprout	Bellsprout	Chétiflor
+P	70	Weepinbell	Weepinbell	Boustiflor
+P	71	Victreebel	Victreebel	Empiflor
+P	72	Tentacool	Tentacool	Tentacool
+P	73	Tentacruel	Tentacruel	Tentacruel
+P	74	Geodude	Geodude	Racaillou
+P	75	Graveler	Graveler	Gravalanch
+P	76	Golem	Golem	Grolem
+P	77	Ponyta	Ponyta	Ponyta
+P	78	Rapidash	Rapidash	Galopa
+P	79	Slowpoke	Slowpoke	Ramoloss
+P	80	Slowbro	Slowbro	Flagadoss
+P	81	Magnemite	Magnemite	Magnéti
+P	82	Magneton	Magneton	Magnéton
+P	83	Farfetch’d	Farfetch’d	Canarticho
+P	84	Doduo	Doduo	Doduo
+P	85	Dodrio	Dodrio	Dodrio
+P	86	Seel	Seel	Otaria
+P	87	Dewgong	Dewgong	Lamantine
+P	88	Grimer	Grimer	Tadmorv
+P	89	Muk	Muk	Grotadmorv
+P	90	Shellder	Shellder	Kokiyas
+P	91	Cloyster	Cloyster	Crustabri
+P	92	Gastly	Gastly	Fantominus
+P	93	Haunter	Haunter	Spectrum
+P	94	Gengar	Gengar	Ectoplasma
+P	95	Onix	Onix	Onix
+P	96	Drowzee	Drowzee	Soporifik
+P	97	Hypno	Hypno	Hypnomade
+P	98	Krabby	Krabby	Krabby
+P	99	Kingler	Kingler	Krabboss
+P	100	Voltorb	Voltorb	Voltorbe
+P	101	Electrode	Electrode	Électrode
+P	102	Exeggcute	Exeggcute	Noeunoeuf
+P	103	Exeggutor	Exeggutor	Noadkoko
+P	104	Cubone	Cubone	Osselait
+P	105	Marowak	Marowak	Ossatueur
+P	106	Hitmonlee	Hitmonlee	Kicklee
+P	107	Hitmonchan	Hitmonchan	Tygnon
+P	108	Lickitung	Lickitung	Excelangue
+P	109	Koffing	Koffing	Smogo
+P	110	Weezing	Weezing	Smogogo
+P	111	Rhyhorn	Rhyhorn	Rhinocorne
+P	112	Rhydon	Rhydon	Rhinoféros
+P	113	Chansey	Chansey	Leveinard
+P	114	Tangela	Tangela	Saquedeneu
+P	115	Kangaskhan	Kangaskhan	Kangourex
+P	116	Horsea	Horsea	Hypotrempe
+P	117	Seadra	Seadra	Hypocéan
+P	118	Goldeen	Goldeen	Poissirène
+P	119	Seaking	Seaking	Poissoroy
+P	120	Staryu	Staryu	Stari
+P	121	Starmie	Starmie	Staross
+P	122	Mr. Mime	Mr. Mime	M. Mime
+P	123	Scyther	Scyther	Insécateur
+P	124	Jynx	Jynx	Lippoutou
+P	125	Electabuzz	Electabuzz	Élektek
+P	126	Magmar	Magmar	Magmar
+P	127	Pinsir	Pinsir	Scarabrute
+P	128	Tauros	Tauros	Tauros
+P	129	Magikarp	Magikarp	Magicarpe
+P	130	Gyarados	Gyarados	Léviator
+P	131	Lapras	Lapras	Lokhlass
+P	132	Ditto	Ditto	Métamorph
+P	133	Eevee	Eevee	Évoli
+P	134	Vaporeon	Vaporeon	Aquali
+P	135	Jolteon	Jolteon	Voltali
+P	136	Flareon	Flareon	Pyroli
+P	137	Porygon	Porygon	Porygon
+P	138	Omanyte	Omanyte	Amonita
+P	139	Omastar	Omastar	Amonistar
+P	140	Kabuto	Kabuto	Kabuto
+P	141	Kabutops	Kabutops	Kabutops
+P	142	Aerodactyl	Aerodactyl	Ptéra
+P	143	Snorlax	Snorlax	Ronflex
+P	144	Articuno	Articuno	Artikodin
+P	145	Zapdos	Zapdos	Électhor
+P	146	Moltres	Moltres	Sulfura
+P	147	Dratini	Dratini	Minidraco
+P	148	Dragonair	Dragonair	Draco
+P	149	Dragonite	Dragonite	Dracolosse
+P	150	Mewtwo	Mewtwo	Mewtwo
+P	151	Mew	Mew	Mew
+P	152	Chikorita	Chikorita	Germignon
+P	153	Bayleef	Bayleef	Macronium
+P	154	Meganium	Meganium	Méganium
+P	155	Cyndaquil	Cyndaquil	Héricendre
+P	156	Quilava	Quilava	Feurisson
+P	157	Typhlosion	Typhlosion	Typhlosion
+P	158	Totodile	Totodile	Kaiminus
+P	159	Croconaw	Croconaw	Crocrodil
+P	160	Feraligatr	Feraligatr	Aligatueur
+P	161	Sentret	Sentret	Fouinette
+P	162	Furret	Furret	Fouinar
+P	163	Hoothoot	Hoothoot	Hoothoot
+P	164	Noctowl	Noctowl	Noarfang
+P	165	Ledyba	Ledyba	Coxy
+P	166	Ledian	Ledian	Coxyclaque
+P	167	Spinarak	Spinarak	Mimigal
+P	168	Ariados	Ariados	Migalos
+P	169	Crobat	Crobat	Nostenfer
+P	170	Chinchou	Chinchou	Loupio
+P	171	Lanturn	Lanturn	Lanturn
+P	172	Pichu	Pichu	Pichu
+P	173	Cleffa	Cleffa	Mélo
+P	174	Igglybuff	Igglybuff	Toudoudou
+P	175	Togepi	Togepi	Togepi
+P	176	Togetic	Togetic	Togetic
+P	177	Natu	Natu	Natu
+P	178	Xatu	Xatu	Xatu
+P	179	Mareep	Mareep	Wattouat
+P	180	Flaaffy	Flaaffy	Lainergie
+P	181	Ampharos	Ampharos	Pharamp
+P	182	Bellossom	Bellossom	Joliflor
+P	183	Marill	Marill	Marill
+P	184	Azumarill	Azumarill	Azumarill
+P	185	Sudowoodo	Sudowoodo	Simularbre
+P	186	Politoed	Politoed	Tarpaud
+P	187	Hoppip	Hoppip	Granivol
+P	188	Skiploom	Skiploom	Floravol
+P	189	Jumpluff	Jumpluff	Cotovol
+P	190	Aipom	Aipom	Capumain
+P	191	Sunkern	Sunkern	Tournegrin
+P	192	Sunflora	Sunflora	Héliatronc
+P	193	Yanma	Yanma	Yanma
+P	194	Wooper	Wooper	Axoloto
+P	195	Quagsire	Quagsire	Maraiste
+P	196	Espeon	Espeon	Mentali
+P	197	Umbreon	Umbreon	Noctali
+P	198	Murkrow	Murkrow	Cornèbre
+P	199	Slowking	Slowking	Roigada
+P	200	Misdreavus	Misdreavus	Feuforêve
+P	201	Unown	Unown	Zarbi
+P	202	Wobbuffet	Wobbuffet	Qulbutoké
+P	203	Girafarig	Girafarig	Girafarig
+P	204	Pineco	Pineco	Pomdepik
+P	205	Forretress	Forretress	Foretress
+P	206	Dunsparce	Dunsparce	Insolourdo
+P	207	Gligar	Gligar	Scorplane
+P	208	Steelix	Steelix	Steelix
+P	209	Snubbull	Snubbull	Snubbull
+P	210	Granbull	Granbull	Granbull
+P	211	Qwilfish	Qwilfish	Qwilfish
+P	212	Scizor	Scizor	Cizayox
+P	213	Shuckle	Shuckle	Caratroc
+P	214	Heracross	Heracross	Scarhino
+P	215	Sneasel	Sneasel	Farfuret
+P	216	Teddiursa	Teddiursa	Teddiursa
+P	217	Ursaring	Ursaring	Ursaring
+P	218	Slugma	Slugma	Limagma
+P	219	Magcargo	Magcargo	Volcaropod
+P	220	Swinub	Swinub	Marcacrin
+P	221	Piloswine	Piloswine	Cochignon
+P	222	Corsola	Corsola	Corayon
+P	223	Remoraid	Remoraid	Rémoraid
+P	224	Octillery	Octillery	Octillery
+P	225	Delibird	Delibird	Cadoizo
+P	226	Mantine	Mantine	Démanta
+P	227	Skarmory	Skarmory	Airmure
+P	228	Houndour	Houndour	Malosse
+P	229	Houndoom	Houndoom	Démolosse
+P	230	Kingdra	Kingdra	Hyporoi
+P	231	Phanpy	Phanpy	Phanpy
+P	232	Donphan	Donphan	Donphan
+P	233	Porygon2	Porygon2	Porygon2
+P	234	Stantler	Stantler	Cerfrousse
+P	235	Smeargle	Smeargle	Queulorior
+P	236	Tyrogue	Tyrogue	Debugant
+P	237	Hitmontop	Hitmontop	Kapoera
+P	238	Smoochum	Smoochum	Lippouti
+P	239	Elekid	Elekid	Élekid
+P	240	Magby	Magby	Magby
+P	241	Miltank	Miltank	Écrémeuh
+P	242	Blissey	Blissey	Leuphorie
+P	243	Raikou	Raikou	Raikou
+P	244	Entei	Entei	Entei
+P	245	Suicune	Suicune	Suicune
+P	246	Larvitar	Larvitar	Embrylex
+P	247	Pupitar	Pupitar	Ymphect
+P	248	Tyranitar	Tyranitar	Tyranocif
+P	249	Lugia	Lugia	Lugia
+P	250	Ho-Oh	Ho-Oh	Ho-Oh
+P	251	Celebi	Celebi	Celebi
+P	252	Treecko	Treecko	Arcko
+P	253	Grovyle	Grovyle	Massko
+P	254	Sceptile	Sceptile	Jungko
+P	255	Torchic	Torchic	Poussifeu
+P	256	Combusken	Combusken	Galifeu
+P	257	Blaziken	Blaziken	Braségali
+P	258	Mudkip	Mudkip	Gobou
+P	259	Marshtomp	Marshtomp	Flobio
+P	260	Swampert	Swampert	Laggron
+P	261	Poochyena	Poochyena	Medhyèna
+P	262	Mightyena	Mightyena	Grahyèna
+P	263	Zigzagoon	Zigzagoon	Zigzaton
+P	264	Linoone	Linoone	Linéon
+P	265	Wurmple	Wurmple	Chenipotte
+P	266	Silcoon	Silcoon	Armulys
+P	267	Beautifly	Beautifly	Charmillon
+P	268	Cascoon	Cascoon	Blindalys
+P	269	Dustox	Dustox	Papinox
+P	270	Lotad	Lotad	Nénupiot
+P	271	Lombre	Lombre	Lombre
+P	272	Ludicolo	Ludicolo	Ludicolo
+P	273	Seedot	Seedot	Grainipiot
+P	274	Nuzleaf	Nuzleaf	Pifeuil
+P	275	Shiftry	Shiftry	Tengalice
+P	276	Taillow	Taillow	Nirondelle
+P	277	Swellow	Swellow	Hélédelle
+P	278	Wingull	Wingull	Goélise
+P	279	Pelipper	Pelipper	Bekipan
+P	280	Ralts	Ralts	Tarsal
+P	281	Kirlia	Kirlia	Kirlia
+P	282	Gardevoir	Gardevoir	Gardevoir
+P	283	Surskit	Surskit	Arakdo
+P	284	Masquerain	Masquerain	Maskadra
+P	285	Shroomish	Shroomish	Balignon
+P	286	Breloom	Breloom	Chapignon
+P	287	Slakoth	Slakoth	Parecool
+P	288	Vigoroth	Vigoroth	Vigoroth
+P	289	Slaking	Slaking	Monaflèmit
+P	290	Nincada	Nincada	Ningale
+P	291	Ninjask	Ninjask	Ninjask
+P	292	Shedinja	Shedinja	Munja
+P	293	Whismur	Whismur	Chuchmur
+P	294	Loudred	Loudred	Ramboum
+P	295	Exploud	Exploud	Brouhabam
+P	296	Makuhita	Makuhita	Makuhita
+P	297	Hariyama	Hariyama	Hariyama
+P	298	Azurill	Azurill	Azurill
+P	299	Nosepass	Nosepass	Tarinor
+P	300	Skitty	Skitty	Skitty
+P	301	Delcatty	Delcatty	Delcatty
+P	302	Sableye	Sableye	Ténéfix
+P	303	Mawile	Mawile	Mysdibule
+P	304	Aron	Aron	Galekid
+P	305	Lairon	Lairon	Galegon
+P	306	Aggron	Aggron	Galeking
+P	307	Meditite	Meditite	Méditikka
+P	308	Medicham	Medicham	Charmina
+P	309	Electrike	Electrike	Dynavolt
+P	310	Manectric	Manectric	Élecsprint
+P	311	Plusle	Plusle	Posipi
+P	312	Minun	Minun	Négapi
+P	313	Volbeat	Volbeat	Muciole
+P	314	Illumise	Illumise	Lumivole
+P	315	Roselia	Roselia	Rosélia
+P	316	Gulpin	Gulpin	Gloupti
+P	317	Swalot	Swalot	Avaltout
+P	318	Carvanha	Carvanha	Carvanha
+P	319	Sharpedo	Sharpedo	Sharpedo
+P	320	Wailmer	Wailmer	Wailmer
+P	321	Wailord	Wailord	Wailord
+P	322	Numel	Numel	Chamallot
+P	323	Camerupt	Camerupt	Camérupt
+P	324	Torkoal	Torkoal	Chartor
+P	325	Spoink	Spoink	Spoink
+P	326	Grumpig	Grumpig	Groret
+P	327	Spinda	Spinda	Spinda
+P	328	Trapinch	Trapinch	Kraknoix
+P	329	Vibrava	Vibrava	Vibraninf
+P	330	Flygon	Flygon	Libégon
+P	331	Cacnea	Cacnea	Cacnea
+P	332	Cacturne	Cacturne	Cacturne
+P	333	Swablu	Swablu	Tylton
+P	334	Altaria	Altaria	Altaria
+P	335	Zangoose	Zangoose	Mangriff
+P	336	Seviper	Seviper	Séviper
+P	337	Lunatone	Lunatone	Séléroc
+P	338	Solrock	Solrock	Solaroc
+P	339	Barboach	Barboach	Barloche
+P	340	Whiscash	Whiscash	Barbicha
+P	341	Corphish	Corphish	Écrapince
+P	342	Crawdaunt	Crawdaunt	Colhomard
+P	343	Baltoy	Baltoy	Balbuto
+P	344	Claydol	Claydol	Kaorine
+P	345	Lileep	Lileep	Lilia
+P	346	Cradily	Cradily	Vacilys
+P	347	Anorith	Anorith	Anorith
+P	348	Armaldo	Armaldo	Armaldo
+P	349	Feebas	Feebas	Barpau
+P	350	Milotic	Milotic	Milobellus
+P	351	Castform	Castform	Morphéo
+P	352	Kecleon	Kecleon	Kecleon
+P	353	Shuppet	Shuppet	Polichombr
+P	354	Banette	Banette	Branette
+P	355	Duskull	Duskull	Skelénox
+P	356	Dusclops	Dusclops	Téraclope
+P	357	Tropius	Tropius	Tropius
+P	358	Chimecho	Chimecho	Éoko
+P	359	Absol	Absol	Absol
+P	360	Wynaut	Wynaut	Okéoké
+P	361	Snorunt	Snorunt	Stalgamin
+P	362	Glalie	Glalie	Oniglali
+P	363	Spheal	Spheal	Obalie
+P	364	Sealeo	Sealeo	Phogleur
+P	365	Walrein	Walrein	Kaimorse
+P	366	Clamperl	Clamperl	Coquiperl
+P	367	Huntail	Huntail	Serpang
+P	368	Gorebyss	Gorebyss	Rosabyss
+P	369	Relicanth	Relicanth	Relicanth
+P	370	Luvdisc	Luvdisc	Lovdisc
+P	371	Bagon	Bagon	Draby
+P	372	Shelgon	Shelgon	Drackhaus
+P	373	Salamence	Salamence	Drattak
+P	374	Beldum	Beldum	Terhal
+P	375	Metang	Metang	Métang
+P	376	Metagross	Metagross	Métalosse
+P	377	Regirock	Regirock	Regirock
+P	378	Regice	Regice	Regice
+P	379	Registeel	Registeel	Registeel
+P	380	Latias	Latias	Latias
+P	381	Latios	Latios	Latios
+P	382	Kyogre	Kyogre	Kyogre
+P	383	Groudon	Groudon	Groudon
+P	384	Rayquaza	Rayquaza	Rayquaza
+P	385	Jirachi	Jirachi	Jirachi
+P	386	Deoxys	Deoxys	Deoxys
+P	387	Turtwig	Turtwig	Tortipouss
+P	388	Grotle	Grotle	Boskara
+P	389	Torterra	Torterra	Torterra
+P	390	Chimchar	Chimchar	Ouisticram
+P	391	Monferno	Monferno	Chimpenfeu
+P	392	Infernape	Infernape	Simiabraz
+P	393	Piplup	Piplup	Tiplouf
+P	394	Prinplup	Prinplup	Prinplouf
+P	395	Empoleon	Empoleon	Pingoléon
+P	396	Starly	Starly	Étourmi
+P	397	Staravia	Staravia	Étourvol
+P	398	Staraptor	Staraptor	Étouraptor
+P	399	Bidoof	Bidoof	Keunotor
+P	400	Bibarel	Bibarel	Castorno
+P	401	Kricketot	Kricketot	Crikzik
+P	402	Kricketune	Kricketune	Mélokrik
+P	403	Shinx	Shinx	Lixy
+P	404	Luxio	Luxio	Luxio
+P	405	Luxray	Luxray	Luxray
+P	406	Budew	Budew	Rozbouton
+P	407	Roserade	Roserade	Roserade
+P	408	Cranidos	Cranidos	Kranidos
+P	409	Rampardos	Rampardos	Charkos
+P	410	Shieldon	Shieldon	Dinoclier
+P	411	Bastiodon	Bastiodon	Bastiodon
+P	412	Burmy	Burmy	Cheniti
+P	413	Wormadam	Wormadam	Cheniselle
+P	414	Mothim	Mothim	Papilord
+P	415	Combee	Combee	Apitrini
+P	416	Vespiquen	Vespiquen	Apireine
+P	417	Pachirisu	Pachirisu	Pachirisu
+P	418	Buizel	Buizel	Mustébouée
+P	419	Floatzel	Floatzel	Mustéflott
+P	420	Cherubi	Cherubi	Ceribou
+P	421	Cherrim	Cherrim	Ceriflor
+P	422	Shellos	Shellos	Sancoki
+P	423	Gastrodon	Gastrodon	Tritosor
+P	424	Ambipom	Ambipom	Capidextre
+P	425	Drifloon	Drifloon	Baudrive
+P	426	Drifblim	Drifblim	Grodrive
+P	427	Buneary	Buneary	Laporeille
+P	428	Lopunny	Lopunny	Lockpin
+P	429	Mismagius	Mismagius	Magirêve
+P	430	Honchkrow	Honchkrow	Corboss
+P	431	Glameow	Glameow	Chaglam
+P	432	Purugly	Purugly	Chaffreux
+P	433	Chingling	Chingling	Korillon
+P	434	Stunky	Stunky	Moufouette
+P	435	Skuntank	Skuntank	Moufflair
+P	436	Bronzor	Bronzor	Archéomire
+P	437	Bronzong	Bronzong	Archéodong
+P	438	Bonsly	Bonsly	Manzaï
+P	439	Mime Jr.	Mime Jr.	Mime Jr.
+P	440	Happiny	Happiny	Ptiravi
+P	441	Chatot	Chatot	Pijako
+P	442	Spiritomb	Spiritomb	Spiritomb
+P	443	Gible	Gible	Griknot
+P	444	Gabite	Gabite	Carmache
+P	445	Garchomp	Garchomp	Carchacrok
+P	446	Munchlax	Munchlax	Goinfrex
+P	447	Riolu	Riolu	Riolu
+P	448	Lucario	Lucario	Lucario
+P	449	Hippopotas	Hippopotas	Hippopotas
+P	450	Hippowdon	Hippowdon	Hippodocus
+P	451	Skorupi	Skorupi	Rapion
+P	452	Drapion	Drapion	Drascore
+P	453	Croagunk	Croagunk	Cradopaud
+P	454	Toxicroak	Toxicroak	Coatox
+P	455	Carnivine	Carnivine	Vortente
+P	456	Finneon	Finneon	Écayon
+P	457	Lumineon	Lumineon	Luminéon
+P	458	Mantyke	Mantyke	Babimanta
+P	459	Snover	Snover	Blizzi
+P	460	Abomasnow	Abomasnow	Blizzaroi
+P	461	Weavile	Weavile	Dimoret
+P	462	Magnezone	Magnezone	Magnézone
+P	463	Lickilicky	Lickilicky	Coudlangue
+P	464	Rhyperior	Rhyperior	Rhinastoc
+P	465	Tangrowth	Tangrowth	Bouldeneu
+P	466	Electivire	Electivire	Élekable
+P	467	Magmortar	Magmortar	Maganon
+P	468	Togekiss	Togekiss	Togekiss
+P	469	Yanmega	Yanmega	Yanmega
+P	470	Leafeon	Leafeon	Phyllali
+P	471	Glaceon	Glaceon	Givrali
+P	472	Gliscor	Gliscor	Scorvol
+P	473	Mamoswine	Mamoswine	Mammochon
+P	474	Porygon-Z	Porygon-Z	Porygon-Z
+P	475	Gallade	Gallade	Gallame
+P	476	Probopass	Probopass	Tarinorme
+P	477	Dusknoir	Dusknoir	Noctunoir
+P	478	Froslass	Froslass	Momartik
+P	479	Rotom	Rotom	Motisma
+P	480	Uxie	Uxie	Créhelf
+P	481	Mesprit	Mesprit	Créfollet
+P	482	Azelf	Azelf	Créfadet
+P	483	Dialga	Dialga	Dialga
+P	484	Palkia	Palkia	Palkia
+P	485	Heatran	Heatran	Heatran
+P	486	Regigigas	Regigigas	Regigigas
+P	487	Giratina	Giratina	Giratina
+P	488	Cresselia	Cresselia	Cresselia
+P	489	Phione	Phione	Phione
+P	490	Manaphy	Manaphy	Manaphy
+P	491	Darkrai	Darkrai	Darkrai
+P	492	Shaymin	Shaymin	Shaymin
+P	493	Arceus	Arceus	Arceus
+P	494	Victini	Victini	Victini
+P	495	Snivy	Snivy	Vipélierre
+P	496	Servine	Servine	Lianaja
+P	497	Serperior	Serperior	Majaspic
+P	498	Tepig	Tepig	Gruikui
+P	499	Pignite	Pignite	Grotichon
+P	500	Emboar	Emboar	Roitiflam
+P	501	Oshawott	Oshawott	Moustillon
+P	502	Dewott	Dewott	Mateloutre
+P	503	Samurott	Samurott	Clamiral
+P	504	Patrat	Patrat	Ratentif
+P	505	Watchog	Watchog	Miradar
+P	506	Lillipup	Lillipup	Ponchiot
+P	507	Herdier	Herdier	Ponchien
+P	508	Stoutland	Stoutland	Mastouffe
+P	509	Purrloin	Purrloin	Chacripan
+P	510	Liepard	Liepard	Léopardus
+P	511	Pansage	Pansage	Feuillajou
+P	512	Simisage	Simisage	Feuiloutan
+P	513	Pansear	Pansear	Flamajou
+P	514	Simisear	Simisear	Flamoutan
+P	515	Panpour	Panpour	Flotajou
+P	516	Simipour	Simipour	Flotoutan
+P	517	Munna	Munna	Munna
+P	518	Musharna	Musharna	Mushana
+P	519	Pidove	Pidove	Poichigeon
+P	520	Tranquill	Tranquill	Colombeau
+P	521	Unfezant	Unfezant	Déflaisan
+P	522	Blitzle	Blitzle	Zébibron
+P	523	Zebstrika	Zebstrika	Zéblitz
+P	524	Roggenrola	Roggenrola	Nodulithe
+P	525	Boldore	Boldore	Géolithe
+P	526	Gigalith	Gigalith	Gigalithe
+P	527	Woobat	Woobat	Chovsourir
+P	528	Swoobat	Swoobat	Rhinolove
+P	529	Drilbur	Drilbur	Rototaupe
+P	530	Excadrill	Excadrill	Minotaupe
+P	531	Audino	Audino	Nanméouïe
+P	532	Timburr	Timburr	Charpenti
+P	533	Gurdurr	Gurdurr	Ouvrifier
+P	534	Conkeldurr	Conkeldurr	Bétochef
+P	535	Tympole	Tympole	Tritonde
+P	536	Palpitoad	Palpitoad	Batracné
+P	537	Seismitoad	Seismitoad	Crapustule
+P	538	Throh	Throh	Judokrak
+P	539	Sawk	Sawk	Karaclée
+P	540	Sewaddle	Sewaddle	Larveyette
+P	541	Swadloon	Swadloon	Couverdure
+P	542	Leavanny	Leavanny	Manternel
+P	543	Venipede	Venipede	Venipatte
+P	544	Whirlipede	Whirlipede	Scobolide
+P	545	Scolipede	Scolipede	Brutapode
+P	546	Cottonee	Cottonee	Doudouvet
+P	547	Whimsicott	Whimsicott	Farfaduvet
+P	548	Petilil	Petilil	Chlorobule
+P	549	Lilligant	Lilligant	Fragilady
+P	550	Basculin	Basculin	Bargantua
+P	551	Sandile	Sandile	Mascaïman
+P	552	Krokorok	Krokorok	Escroco
+P	553	Krookodile	Krookodile	Crocorible
+P	554	Darumaka	Darumaka	Darumarond
+P	555	Darmanitan	Darmanitan	Darumacho
+P	556	Maractus	Maractus	Maracachi
+P	557	Dwebble	Dwebble	Crabicoque
+P	558	Crustle	Crustle	Crabaraque
+P	559	Scraggy	Scraggy	Baggiguane
+P	560	Scrafty	Scrafty	Baggaïd
+P	561	Sigilyph	Sigilyph	Cryptéro
+P	562	Yamask	Yamask	Tutafeh
+P	563	Cofagrigus	Cofagrigus	Tutankafer
+P	564	Tirtouga	Tirtouga	Carapagos
+P	565	Carracosta	Carracosta	Mégapagos
+P	566	Archen	Archen	Arkéapti
+P	567	Archeops	Archeops	Aéroptéryx
+P	568	Trubbish	Trubbish	Miamiasme
+P	569	Garbodor	Garbodor	Miasmax
+P	570	Zorua	Zorua	Zorua
+P	571	Zoroark	Zoroark	Zoroark
+P	572	Minccino	Minccino	Chinchidou
+P	573	Cinccino	Cinccino	Pashmilla
+P	574	Gothita	Gothita	Scrutella
+P	575	Gothorita	Gothorita	Mesmérella
+P	576	Gothitelle	Gothitelle	Sidérella
+P	577	Solosis	Solosis	Nucléos
+P	578	Duosion	Duosion	Méios
+P	579	Reuniclus	Reuniclus	Symbios
+P	580	Ducklett	Ducklett	Couaneton
+P	581	Swanna	Swanna	Lakmécygne
+P	582	Vanillite	Vanillite	Sorbébé
+P	583	Vanillish	Vanillish	Sorboul
+P	584	Vanilluxe	Vanilluxe	Sorbouboul
+P	585	Deerling	Deerling	Vivaldaim
+P	586	Sawsbuck	Sawsbuck	Haydaim
+P	587	Emolga	Emolga	Emolga
+P	588	Karrablast	Karrablast	Carabing
+P	589	Escavalier	Escavalier	Lançargot
+P	590	Foongus	Foongus	Trompignon
+P	591	Amoonguss	Amoonguss	Gaulet
+P	592	Frillish	Frillish	Viskuse
+P	593	Jellicent	Jellicent	Moyade
+P	594	Alomomola	Alomomola	Mamanbo
+P	595	Joltik	Joltik	Statitik
+P	596	Galvantula	Galvantula	Mygavolt
+P	597	Ferroseed	Ferroseed	Grindur
+P	598	Ferrothorn	Ferrothorn	Noacier
+P	599	Klink	Klink	Tic
+P	600	Klang	Klang	Clic
+P	601	Klinklang	Klinklang	Cliticlic
+P	602	Tynamo	Tynamo	Anchwatt
+P	603	Eelektrik	Eelektrik	Lampéroie
+P	604	Eelektross	Eelektross	Ohmassacre
+P	605	Elgyem	Elgyem	Lewsor
+P	606	Beheeyem	Beheeyem	Neitram
+P	607	Litwick	Litwick	Funécire
+P	608	Lampent	Lampent	Mélancolux
+P	609	Chandelure	Chandelure	Lugulabre
+P	610	Axew	Axew	Coupenotte
+P	611	Fraxure	Fraxure	Incisache
+P	612	Haxorus	Haxorus	Tranchodon
+P	613	Cubchoo	Cubchoo	Polarhume
+P	614	Beartic	Beartic	Polagriffe
+P	615	Cryogonal	Cryogonal	Hexagel
+P	616	Shelmet	Shelmet	Escargaume
+P	617	Accelgor	Accelgor	Limaspeed
+P	618	Stunfisk	Stunfisk	Limonde
+P	619	Mienfoo	Mienfoo	Kungfouine
+P	620	Mienshao	Mienshao	Shaofouine
+P	621	Druddigon	Druddigon	Drakkarmin
+P	622	Golett	Golett	Gringolem
+P	623	Golurk	Golurk	Golemastoc
+P	624	Pawniard	Pawniard	Scalpion
+P	625	Bisharp	Bisharp	Scalproie
+P	626	Bouffalant	Bouffalant	Frison
+P	627	Rufflet	Rufflet	Furaiglon
+P	628	Braviary	Braviary	Gueriaigle
+P	629	Vullaby	Vullaby	Vostourno
+P	630	Mandibuzz	Mandibuzz	Vaututrice
+P	631	Heatmor	Heatmor	Aflamanoir
+P	632	Durant	Durant	Fermite
+P	633	Deino	Deino	Solochi
+P	634	Zweilous	Zweilous	Diamat
+P	635	Hydreigon	Hydreigon	Trioxhydre
+P	636	Larvesta	Larvesta	Pyronille
+P	637	Volcarona	Volcarona	Pyrax
+P	638	Cobalion	Cobalion	Cobaltium
+P	639	Terrakion	Terrakion	Terrakium
+P	640	Virizion	Virizion	Viridium
+P	641	Tornadus	Tornadus	Boréas
+P	642	Thundurus	Thundurus	Fulguris
+P	643	Reshiram	Reshiram	Reshiram
+P	644	Zekrom	Zekrom	Zekrom
+P	645	Landorus	Landorus	Démétéros
+P	646	Kyurem	Kyurem	Kyurem
+P	647	Keldeo	Keldeo	Keldeo
+P	648	Meloetta	Meloetta	Meloetta
+P	649	Genesect	Genesect	Genesect
+P	650	Chespin	Chespin	Marisson
+P	651	Quilladin	Quilladin	Boguérisse
+P	652	Chesnaught	Chesnaught	Blindépique
+P	653	Fennekin	Fennekin	Feunnec
+P	654	Braixen	Braixen	Roussil
+P	655	Delphox	Delphox	Goupelin
+P	656	Froakie	Froakie	Grenousse
+P	657	Frogadier	Frogadier	Croâporal
+P	658	Greninja	Greninja	Amphinobi
+P	659	Bunnelby	Bunnelby	Sapereau
+P	660	Diggersby	Diggersby	Excavarenne
+P	661	Fletchling	Fletchling	Passerouge
+P	662	Fletchinder	Fletchinder	Braisillon
+P	663	Talonflame	Talonflame	Flambusard
+P	664	Scatterbug	Scatterbug	Lépidonille
+P	665	Spewpa	Spewpa	Pérégrain
+P	666	Vivillon	Vivillon	Prismillon
+P	667	Litleo	Litleo	Hélionceau
+P	668	Pyroar	Pyroar	Némélios
+P	669	Flabébé	Flabébé	Flabébé
+P	670	Floette	Floette	Floette
+P	671	Florges	Florges	Florges
+P	672	Skiddo	Skiddo	Cabriolaine
+P	673	Gogoat	Gogoat	Chevroum
+P	674	Pancham	Pancham	Pandespiègle
+P	675	Pangoro	Pangoro	Pandarbare
+P	676	Furfrou	Furfrou	Couafarel
+P	677	Espurr	Espurr	Psystigri
+P	678	Meowstic	Meowstic	Mistigrix
+P	679	Honedge	Honedge	Monorpale
+P	680	Doublade	Doublade	Dimoclès
+P	681	Aegislash	Aegislash	Exagide
+P	682	Spritzee	Spritzee	Fluvetin
+P	683	Aromatisse	Aromatisse	Cocotine
+P	684	Swirlix	Swirlix	Sucroquin
+P	685	Slurpuff	Slurpuff	Cupcanaille
+P	686	Inkay	Inkay	Sepiatop
+P	687	Malamar	Malamar	Sepiatroce
+P	688	Binacle	Binacle	Opermine
+P	689	Barbaracle	Barbaracle	Golgopathe
+P	690	Skrelp	Skrelp	Venalgue
+P	691	Dragalge	Dragalge	Kravarech
+P	692	Clauncher	Clauncher	Flingouste
+P	693	Clawitzer	Clawitzer	Gamblast
+P	694	Helioptile	Helioptile	Galvaran
+P	695	Heliolisk	Heliolisk	Iguolta
+P	696	Tyrunt	Tyrunt	Ptyranidur
+P	697	Tyrantrum	Tyrantrum	Rexillius
+P	698	Amaura	Amaura	Amagara
+P	699	Aurorus	Aurorus	Dragmara
+P	700	Sylveon	Sylveon	Nymphali
+P	701	Hawlucha	Hawlucha	Brutalibré
+P	702	Dedenne	Dedenne	Dedenne
+P	703	Carbink	Carbink	Strassie
+P	704	Goomy	Goomy	Mucuscule
+P	705	Sliggoo	Sliggoo	Colimucus
+P	706	Goodra	Goodra	Muplodocus
+P	707	Klefki	Klefki	Trousselin
+P	708	Phantump	Phantump	Brocélôme
+P	709	Trevenant	Trevenant	Desséliande
+P	710	Pumpkaboo	Pumpkaboo	Pitrouille
+P	711	Gourgeist	Gourgeist	Banshitrouye
+P	712	Bergmite	Bergmite	Grelaçon
+P	713	Avalugg	Avalugg	Séracrawl
+P	714	Noibat	Noibat	Sonistrelle
+P	715	Noivern	Noivern	Bruyverne
+P	716	Xerneas	Xerneas	Xerneas
+P	717	Yveltal	Yveltal	Yveltal
+P	718	Zygarde	Zygarde	Zygarde
+P	719	Diancie	Diancie	Diancie
+P	720	Hoopa	Hoopa	Hoopa
+P	721	Volcanion	Volcanion	Volcanion
+M	1	Pound	Destructor	Écras’Face
+M	2	Karate Chop	Golpe Kárate	Poing Karaté
+M	3	Double Slap	Doble Bofetón	Torgnoles
+M	4	Comet Punch	Puño Cometa	Poing Comète
+M	5	Mega Punch	Megapuño	Ultimapoing
+M	6	Pay Day	Día de Pago	Jackpot
+M	7	Fire Punch	Puño Fuego	Poing Feu
+M	8	Ice Punch	Puño Hielo	Poing Glace
+M	9	Thunder Punch	Puño Trueno	Poing Éclair
+M	10	Scratch	Arañazo	Griffe
+M	11	Vise Grip	Agarre	Force Poigne
+M	12	Guillotine	Guillotina	Guillotine
+M	13	Razor Wind	Viento Cortante	Coupe-Vent
+M	14	Swords Dance	Danza Espada	Danse Lames
+M	15	Cut	Corte	Coupe
+M	16	Gust	Tornado	Tornade
+M	17	Wing Attack	Ataque Ala	Cru-Ailes
+M	18	Whirlwind	Remolino	Cyclone
+M	19	Fly	Vuelo	Vol
+M	20	Bind	Atadura	Étreinte
+M	21	Slam	Atizar	Souplesse
+M	22	Vine Whip	Látigo Cepa	Fouet Lianes
+M	23	Stomp	Pisotón	Écrasement
+M	24	Double Kick	Doble Patada	Double Pied
+M	25	Mega Kick	Megapatada	Ultimawashi
+M	26	Jump Kick	Patada Salto	Pied Sauté
+M	27	Rolling Kick	Patada Giro	Mawashi Geri
+M	28	Sand Attack	Ataque Arena	Jet de Sable
+M	29	Headbutt	Golpe Cabeza	Coup d’Boule
+M	30	Horn Attack	Cornada	Koud’Korne
+M	31	Fury Attack	Ataque Furia	Furie
+M	32	Horn Drill	Perforador	Empal’Korne
+M	33	Tackle	Placaje	Charge
+M	34	Body Slam	Golpe Cuerpo	Plaquage
+M	35	Wrap	Constricción	Ligotage
+M	36	Take Down	Derribo	Bélier
+M	37	Thrash	Saña	Mania
+M	38	Double-Edge	Doble Filo	Damoclès
+M	39	Tail Whip	Agitacola	Mimi-Queue
+M	40	Poison Sting	Picotazo Veneno	Dard-Venin
+M	41	Twineedle	Doble Ataque	Double Dard
+M	42	Pin Missile	Pin Misil	Dard-Nuée
+M	43	Leer	Malicioso	Groz’Yeux
+M	44	Bite	Mordisco	Morsure
+M	45	Growl	Gruñido	Rugissement
+M	46	Roar	Rugido	Hurlement
+M	47	Sing	Canto	Berceuse
+M	48	Supersonic	Supersónico	Ultrason
+M	49	Sonic Boom	Bomba Sónica	Sonic Boom
+M	50	Disable	Anulación	Entrave
+M	51	Acid	Ácido	Acide
+M	52	Ember	Ascuas	Flammèche
+M	53	Flamethrower	Lanzallamas	Lance-Flammes
+M	54	Mist	Neblina	Brume
+M	55	Water Gun	Pistola Agua	Pistolet à O
+M	56	Hydro Pump	Hidrobomba	Hydrocanon
+M	57	Surf	Surf	Surf
+M	58	Ice Beam	Rayo Hielo	Laser Glace
+M	59	Blizzard	Ventisca	Blizzard
+M	60	Psybeam	Psicorrayo	Rafale Psy
+M	61	Bubble Beam	Rayo Burbuja	Bulles d’O
+M	62	Aurora Beam	Rayo Aurora	Onde Boréale
+M	63	Hyper Beam	Hiperrayo	Ultralaser
+M	64	Peck	Picotazo	Picpic
+M	65	Drill Peck	Pico Taladro	Bec Vrille
+M	66	Submission	Sumisión	Sacrifice
+M	67	Low Kick	Patada Baja	Balayage
+M	68	Counter	Contraataque	Riposte
+M	69	Seismic Toss	Sísmico	Frappe Atlas
+M	70	Strength	Fuerza	Force
+M	71	Absorb	Absorber	Vole-Vie
+M	72	Mega Drain	Megaagotar	Méga-Sangsue
+M	73	Leech Seed	Drenadoras	Vampigraine
+M	74	Growth	Desarrollo	Croissance
+M	75	Razor Leaf	Hoja Afilada	Tranch’Herbe
+M	76	Solar Beam	Rayo Solar	Lance-Soleil
+M	77	Poison Powder	Polvo Veneno	Poudre Toxik
+M	78	Stun Spore	Paralizador	Para-Spore
+M	79	Sleep Powder	Somnífero	Poudre Dodo
+M	80	Petal Dance	Danza Pétalo	Danse Fleurs
+M	81	String Shot	Disparo Demora	Sécrétion
+M	82	Dragon Rage	Furia Dragón	Draco-Rage
+M	83	Fire Spin	Giro Fuego	Danse Flammes
+M	84	Thunder Shock	Impactrueno	Éclair
+M	85	Thunderbolt	Rayo	Tonnerre
+M	86	Thunder Wave	Onda Trueno	Cage Éclair
+M	87	Thunder	Trueno	Fatal-Foudre
+M	88	Rock Throw	Lanzarrocas	Jet-Pierres
+M	89	Earthquake	Terremoto	Séisme
+M	90	Fissure	Fisura	Abîme
+M	91	Dig	Excavar	Tunnel
+M	92	Toxic	Tóxico	Toxik
+M	93	Confusion	Confusión	Choc Mental
+M	94	Psychic	Psíquico	Psyko
+M	95	Hypnosis	Hipnosis	Hypnose
+M	96	Meditate	Meditación	Yoga
+M	97	Agility	Agilidad	Hâte
+M	98	Quick Attack	Ataque Rápido	Vive-Attaque
+M	99	Rage	Furia	Frénésie
+M	100	Teleport	Teletransporte	Téléport
+M	101	Night Shade	Tinieblas	Ombre Nocturne
+M	102	Mimic	Mimético	Copie
+M	103	Screech	Chirrido	Grincement
+M	104	Double Team	Doble Equipo	Reflet
+M	105	Recover	Recuperación	Soin
+M	106	Harden	Fortaleza	Armure
+M	107	Minimize	Reducción	Lilliput
+M	108	Smokescreen	Pantalla de Humo	Brouillard
+M	109	Confuse Ray	Rayo Confuso	Onde Folie
+M	110	Withdraw	Refugio	Repli
+M	111	Defense Curl	Rizo Defensa	Boul’Armure
+M	112	Barrier	Barrera	Bouclier
+M	113	Light Screen	Pantalla de Luz	Mur Lumière
+M	114	Haze	Niebla	Buée Noire
+M	115	Reflect	Reflejo	Protection
+M	116	Focus Energy	Foco Energía	Puissance
+M	117	Bide	Venganza	Patience
+M	118	Metronome	Metrónomo	Métronome
+M	119	Mirror Move	Espejo	Mimique
+M	120	Self-Destruct	Autodestrucción	Destruction
+M	121	Egg Bomb	Bomba Huevo	Bombe Œuf
+M	122	Lick	Lengüetazo	Léchouille
+M	123	Smog	Polución	Purédpois
+M	124	Sludge	Residuos	Détritus
+M	125	Bone Club	Hueso Palo	Massd’Os
+M	126	Fire Blast	Llamarada	Déflagration
+M	127	Waterfall	Cascada	Cascade
+M	128	Clamp	Tenaza	Claquoir
+M	129	Swift	Meteoros	Météores
+M	130	Skull Bash	Cabezazo	Coud’Krâne
+M	131	Spike Cannon	Clavo Cañón	Picanon
+M	132	Constrict	Restricción	Constriction
+M	133	Amnesia	Amnesia	Amnésie
+M	134	Kinesis	Kinético	Télékinésie
+M	135	Soft-Boiled	Ovocuración	E-Coque
+M	136	High Jump Kick	Patada Salto Alta	Pied Voltige
+M	137	Glare	Deslumbrar	Regard Médusant
+M	138	Dream Eater	Comesueños	Dévorêve
+M	139	Poison Gas	Gas Venenoso	Gaz Toxik
+M	140	Barrage	Bombardeo	Pilonnage
+M	141	Leech Life	Chupavidas	Vampirisme
+M	142	Lovely Kiss	Beso Amoroso	Grobisou
+M	143	Sky Attack	Ataque Aéreo	Piqué
+M	144	Transform	Transformación	Morphing
+M	145	Bubble	Burbuja	Écume
+M	146	Dizzy Punch	Puño Mareo	Uppercut
+M	147	Spore	Espora	Spore
+M	148	Flash	Destello	Flash
+M	149	Psywave	Psicoonda	Vague Psy
+M	150	Splash	Salpicadura	Trempette
+M	151	Acid Armor	Armadura Ácida	Acidarmure
+M	152	Crabhammer	Martillazo	Pince-Masse
+M	153	Explosion	Explosión	Explosion
+M	154	Fury Swipes	Golpes Furia	Combo-Griffe
+M	155	Bonemerang	Huesomerang	Osmerang
+M	156	Rest	Descanso	Repos
+M	157	Rock Slide	Avalancha	Éboulement
+M	158	Hyper Fang	Hipercolmillo	Croc de Mort
+M	159	Sharpen	Afilar	Affûtage
+M	160	Conversion	Conversión	Conversion
+M	161	Tri Attack	Triataque	Triplattaque
+M	162	Super Fang	Superdiente	Croc Fatal
+M	163	Slash	Cuchillada	Tranche
+M	164	Substitute	Sustituto	Clonage
+M	165	Struggle	Forcejeo	Lutte
+M	166	Sketch	Esquema	Gribouille
+M	167	Triple Kick	Triple Patada	Triple Pied
+M	168	Thief	Ladrón	Larcin
+M	169	Spider Web	Telaraña	Toile
+M	170	Mind Reader	Telépata	Lire-Esprit
+M	171	Nightmare	Pesadilla	Cauchemar
+M	172	Flame Wheel	Rueda Fuego	Roue de Feu
+M	173	Snore	Ronquido	Ronflement
+M	174	Curse	Maldición	Malédiction
+M	175	Flail	Azote	Gigotage
+M	176	Conversion 2	Conversión 2	Conversion 2
+M	177	Aeroblast	Aerochorro	Aéroblast
+M	178	Cotton Spore	Esporagodón	Spore Coton
+M	179	Reversal	Inversión	Contre
+M	180	Spite	Rencor	Dépit
+M	181	Powder Snow	Nieve Polvo	Poudreuse
+M	182	Protect	Protección	Abri
+M	183	Mach Punch	Ultrapuño	Mach Punch
+M	184	Scary Face	Cara Susto	Grimace
+M	185	Feint Attack	Finta	Feinte
+M	186	Sweet Kiss	Beso Dulce	Doux Baiser
+M	187	Belly Drum	Tambor	Cognobidon
+M	188	Sludge Bomb	Bomba Lodo	Bombe Beurk
+M	189	Mud-Slap	Bofetón Lodo	Coud’Boue
+M	190	Octazooka	Pulpocañón	Octazooka
+M	191	Spikes	Púas	Picots
+M	192	Zap Cannon	Electrocañón	Élecanon
+M	193	Foresight	Profecía	Clairvoyance
+M	194	Destiny Bond	Mismo Destino	Lien du Destin
+M	195	Perish Song	Canto Mortal	Requiem
+M	196	Icy Wind	Viento Hielo	Vent Glace
+M	197	Detect	Detección	Détection
+M	198	Bone Rush	Ataque Óseo	Charge Os
+M	199	Lock-On	Fijar Blanco	Verrouillage
+M	200	Outrage	Enfado	Colère
+M	201	Sandstorm	Tormenta de Arena	Tempête de Sable
+M	202	Giga Drain	Gigadrenado	Giga-Sangsue
+M	203	Endure	Aguante	Ténacité
+M	204	Charm	Encanto	Charme
+M	205	Rollout	Rodar	Roulade
+M	206	False Swipe	Falso Tortazo	Faux-Chage
+M	207	Swagger	Fanfarronear	Vantardise
+M	208	Milk Drink	Batido	Lait à Boire
+M	209	Spark	Chispa	Étincelle
+M	210	Fury Cutter	Corte Furia	Taillade
+M	211	Steel Wing	Ala de Acero	Ailes d’Acier
+M	212	Mean Look	Mal de Ojo	Regard Noir
+M	213	Attract	Atracción	Attraction
+M	214	Sleep Talk	Sonámbulo	Blabla Dodo
+M	215	Heal Bell	Cascabel Cura	Glas de Soin
+M	216	Return	Retribución	Retour
+M	217	Present	Presente	Cadeau
+M	218	Frustration	Frustración	Frustration
+M	219	Safeguard	Velo Sagrado	Rune Protect
+M	220	Pain Split	Divide Dolor	Balance
+M	221	Sacred Fire	Fuego Sagrado	Feu Sacré
+M	222	Magnitude	Magnitud	Ampleur
+M	223	Dynamic Punch	Puño Dinámico	Dynamo-Poing
+M	224	Megahorn	Megacuerno	Mégacorne
+M	225	Dragon Breath	Dragoaliento	Draco-Souffle
+M	226	Baton Pass	Relevo	Relais
+M	227	Encore	Otra Vez	Encore
+M	228	Pursuit	Persecución	Poursuite
+M	229	Rapid Spin	Giro Rápido	Tour Rapide
+M	230	Sweet Scent	Dulce Aroma	Doux Parfum
+M	231	Iron Tail	Cola Férrea	Queue de Fer
+M	232	Metal Claw	Garra Metal	Griffe Acier
+M	233	Vital Throw	Llave Vital	Corps Perdu
+M	234	Morning Sun	Sol Matinal	Aurore
+M	235	Synthesis	Fotosíntesis	Synthèse
+M	236	Moonlight	Luz Lunar	Rayon Lune
+M	237	Hidden Power	Poder Oculto	Puissance Cachée
+M	238	Cross Chop	Tajo Cruzado	Coup Croix
+M	239	Twister	Ciclón	Ouragan
+M	240	Rain Dance	Danza Lluvia	Danse Pluie
+M	241	Sunny Day	Día Soleado	Zénith
+M	242	Crunch	Triturar	Mâchouille
+M	243	Mirror Coat	Manto Espejo	Voile Miroir
+M	244	Psych Up	Autosugestión	Boost
+M	245	Extreme Speed	Velocidad Extrema	Vitesse Extrême
+M	246	Ancient Power	Poder Pasado	Pouvoir Antique
+M	247	Shadow Ball	Bola Sombra	Ball’Ombre
+M	248	Future Sight	Premonición	Prescience
+M	249	Rock Smash	Golpe Roca	Éclate-Roc
+M	250	Whirlpool	Torbellino	Siphon
+M	251	Beat Up	Paliza	Baston
+M	252	Fake Out	Sorpresa	Bluff
+M	253	Uproar	Alboroto	Brouhaha
+M	254	Stockpile	Reserva	Stockage
+M	255	Spit Up	Escupir	Relâche
+M	256	Swallow	Tragar	Avale
+M	257	Heat Wave	Onda Ígnea	Canicule
+M	258	Hail	Granizo	Grêle
+M	259	Torment	Tormento	Tourmente
+M	260	Flatter	Camelo	Flatterie
+M	261	Will-O-Wisp	Fuego Fatuo	Feu Follet
+M	262	Memento	Legado	Souvenir
+M	263	Facade	Fachada	Façade
+M	264	Focus Punch	Puño Certero	Mitra-Poing
+M	265	Smelling Salts	Estímulo	Stimulant
+M	266	Follow Me	Señuelo	Par Ici
+M	267	Nature Power	Adaptación	Force Nature
+M	268	Charge	Carga	Chargeur
+M	269	Taunt	Mofa	Provoc
+M	270	Helping Hand	Refuerzo	Coup d’Main
+M	271	Trick	Truco	Tour de Magie
+M	272	Role Play	Imitación	Imitation
+M	273	Wish	Deseo	Vœu
+M	274	Assist	Ayuda	Assistance
+M	275	Ingrain	Arraigo	Racines
+M	276	Superpower	Fuerza Bruta	Surpuissance
+M	277	Magic Coat	Capa Mágica	Reflet Magik
+M	278	Recycle	Reciclaje	Recyclage
+M	279	Revenge	Desquite	Vendetta
+M	280	Brick Break	Demolición	Casse-Brique
+M	281	Yawn	Bostezo	Bâillement
+M	282	Knock Off	Desarme	Sabotage
+M	283	Endeavor	Esfuerzo	Effort
+M	284	Eruption	Estallido	Éruption
+M	285	Skill Swap	Intercambio	Échange
+M	286	Imprison	Sellar	Possessif
+M	287	Refresh	Alivio	Régénération
+M	288	Grudge	Rabia	Rancune
+M	289	Snatch	Robo	Saisie
+M	290	Secret Power	Daño Secreto	Force Cachée
+M	291	Dive	Buceo	Plongée
+M	292	Arm Thrust	Empujón	Cogne
+M	293	Camouflage	Camuflaje	Camouflage
+M	294	Tail Glow	Luminicola	Lumi-Queue
+M	295	Luster Purge	Resplandor	Lumi-Éclat
+M	296	Mist Ball	Bola Neblina	Ball’Brume
+M	297	Feather Dance	Danza Pluma	Danse Plumes
+M	298	Teeter Dance	Danza Caos	Danse Folle
+M	299	Blaze Kick	Patada Ígnea	Pied Brûleur
+M	300	Mud Sport	Chapoteo Lodo	Lance-Boue
+M	301	Ice Ball	Bola Hielo	Ball’Glace
+M	302	Needle Arm	Brazo Pincho	Poing Dard
+M	303	Slack Off	Relajo	Paresse
+M	304	Hyper Voice	Vozarrón	Mégaphone
+M	305	Poison Fang	Colmillo Veneno	Crochet Venin
+M	306	Crush Claw	Garra Brutal	Éclate Griffe
+M	307	Blast Burn	Anillo Ígneo	Rafale Feu
+M	308	Hydro Cannon	Hidrocañón	Hydroblast
+M	309	Meteor Mash	Puño Meteoro	Poing Météore
+M	310	Astonish	Impresionar	Étonnement
+M	311	Weather Ball	Meteorobola	Ball’Météo
+M	312	Aromatherapy	Aromaterapia	Aromathérapie
+M	313	Fake Tears	Llanto Falso	Croco Larme
+M	314	Air Cutter	Aire Afilado	Tranch’Air
+M	315	Overheat	Sofoco	Surchauffe
+M	316	Odor Sleuth	Rastreo	Flair
+M	317	Rock Tomb	Tumba Rocas	Tomberoche
+M	318	Silver Wind	Viento Plata	Vent Argenté
+M	319	Metal Sound	Eco Metálico	Strido-Son
+M	320	Grass Whistle	Silbato	Siffl’Herbe
+M	321	Tickle	Cosquillas	Chatouille
+M	322	Cosmic Power	Masa Cósmica	Force Cosmique
+M	323	Water Spout	Salpicar	Giclédo
+M	324	Signal Beam	Rayo Señal	Rayon Signal
+M	325	Shadow Punch	Puño Sombra	Poing Ombre
+M	326	Extrasensory	Paranormal	Extrasenseur
+M	327	Sky Uppercut	Gancho Alto	Stratopercut
+M	328	Sand Tomb	Bucle Arena	Tourbi-Sable
+M	329	Sheer Cold	Frío Polar	Glaciation
+M	330	Muddy Water	Agua Lodosa	Ocroupi
+M	331	Bullet Seed	Semilladora	Balle Graine
+M	332	Aerial Ace	Golpe Aéreo	Aéropique
+M	333	Icicle Spear	Carámbano	Stalactite
+M	334	Iron Defense	Defensa Férrea	Mur de Fer
+M	335	Block	Bloqueo	Barrage
+M	336	Howl	Aullido	Grondement
+M	337	Dragon Claw	Garra Dragón	Draco-Griffe
+M	338	Frenzy Plant	Planta Feroz	Végé-Attaque
+M	339	Bulk Up	Corpulencia	Gonflette
+M	340	Bounce	Bote	Rebond
+M	341	Mud Shot	Disparo Lodo	Tir de Boue
+M	342	Poison Tail	Cola Veneno	Queue-Poison
+M	343	Covet	Antojo	Implore
+M	344	Volt Tackle	Placaje Eléctrico	Électacle
+M	345	Magical Leaf	Hoja Mágica	Feuille Magik
+M	346	Water Sport	Hidrochorro	Tourniquet
+M	347	Calm Mind	Paz Mental	Plénitude
+M	348	Leaf Blade	Hoja Aguda	Lame Feuille
+M	349	Dragon Dance	Danza Dragón	Danse Draco
+M	350	Rock Blast	Pedrada	Boule Roc
+M	351	Shock Wave	Onda Voltio	Onde de Choc
+M	352	Water Pulse	Hidropulso	Vibraqua
+M	353	Doom Desire	Deseo Oculto	Vœu Destructeur
+M	354	Psycho Boost	Psicoataque	Psycho-Boost
+M	355	Roost	Respiro	Atterrissage
+M	356	Gravity	Gravedad	Gravité
+M	357	Miracle Eye	Gran Ojo	Œil Miracle
+M	358	Wake-Up Slap	Espabila	Réveil Forcé
+M	359	Hammer Arm	Machada	Marto-Poing
+M	360	Gyro Ball	Giro Bola	Gyroballe
+M	361	Healing Wish	Deseo Cura	Vœu Soin
+M	362	Brine	Salmuera	Saumure
+M	363	Natural Gift	Don Natural	Don Naturel
+M	364	Feint	Amago	Ruse
+M	365	Pluck	Picoteo	Picore
+M	366	Tailwind	Viento Afín	Vent Arrière
+M	367	Acupressure	Acupresión	Acupression
+M	368	Metal Burst	Represión Metal	Fulmifer
+M	369	U-turn	Ida y Vuelta	Demi-Tour
+M	370	Close Combat	A Bocajarro	Close Combat
+M	371	Payback	Vendetta	Représailles
+M	372	Assurance	Buena Baza	Assurance
+M	373	Embargo	Embargo	Embargo
+M	374	Fling	Lanzamiento	Dégommage
+M	375	Psycho Shift	Psicocambio	Échange Psy
+M	376	Trump Card	As Oculto	Atout
+M	377	Heal Block	Anticura	Anti-Soin
+M	378	Wring Out	Estrujón	Essorage
+M	379	Power Trick	Truco Fuerza	Astuce Force
+M	380	Gastro Acid	Bilis	Suc Digestif
+M	381	Lucky Chant	Conjuro	Air Veinard
+M	382	Me First	Yo Primero	Moi d’Abord
+M	383	Copycat	Copión	Photocopie
+M	384	Power Swap	Cambiafuerza	Permuforce
+M	385	Guard Swap	Cambiadefensa	Permugarde
+M	386	Punishment	Castigo	Punition
+M	387	Last Resort	Última Baza	Dernier Recours
+M	388	Worry Seed	Abatidoras	Soucigraine
+M	389	Sucker Punch	Golpe Bajo	Coup Bas
+M	390	Toxic Spikes	Púas Tóxicas	Pics Toxik
+M	391	Heart Swap	Cambiaalmas	Permucœur
+M	392	Aqua Ring	Acua Aro	Anneau Hydro
+M	393	Magnet Rise	Levitón	Vol Magnétik
+M	394	Flare Blitz	Envite Ígneo	Boutefeu
+M	395	Force Palm	Palmeo	Forte-Paume
+M	396	Aura Sphere	Esfera Aural	Aurasphère
+M	397	Rock Polish	Pulimento	Poliroche
+M	398	Poison Jab	Puya Nociva	Direct Toxik
+M	399	Dark Pulse	Pulso Umbrío	Vibrobscur
+M	400	Night Slash	Tajo Umbrío	Tranche-Nuit
+M	401	Aqua Tail	Acua Cola	Hydro-Queue
+M	402	Seed Bomb	Bomba Germen	Canon Graine
+M	403	Air Slash	Tajo Aéreo	Lame d’Air
+M	404	X-Scissor	Tijera X	Plaie Croix
+M	405	Bug Buzz	Zumbido	Bourdon
+M	406	Dragon Pulse	Pulso Dragón	Draco-Choc
+M	407	Dragon Rush	Carga Dragón	Draco-Charge
+M	408	Power Gem	Joya de Luz	Rayon Gemme
+M	409	Drain Punch	Puño Drenaje	Vampi-Poing
+M	410	Vacuum Wave	Onda Vacío	Onde Vide
+M	411	Focus Blast	Onda Certera	Exploforce
+M	412	Energy Ball	Energibola	Éco-Sphère
+M	413	Brave Bird	Pájaro Osado	Rapace
+M	414	Earth Power	Tierra Viva	Telluriforce
+M	415	Switcheroo	Trapicheo	Passe-Passe
+M	416	Giga Impact	Gigaimpacto	Giga Impact
+M	417	Nasty Plot	Maquinación	Machination
+M	418	Bullet Punch	Puño Bala	Pisto-Poing
+M	419	Avalanche	Alud	Avalanche
+M	420	Ice Shard	Esquirla Helada	Éclats Glace
+M	421	Shadow Claw	Garra Umbría	Griffe Ombre
+M	422	Thunder Fang	Colmillo Rayo	Crocs Éclair
+M	423	Ice Fang	Colmillo Hielo	Crocs Givre
+M	424	Fire Fang	Colmillo Ígneo	Crocs Feu
+M	425	Shadow Sneak	Sombra Vil	Ombre Portée
+M	426	Mud Bomb	Bomba Fango	Boue-Bombe
+M	427	Psycho Cut	Psicocorte	Coupe Psycho
+M	428	Zen Headbutt	Cabezazo Zen	Psykoud’Boul
+M	429	Mirror Shot	Disparo Espejo	Miroi-Tir
+M	430	Flash Cannon	Cañón Resplandor	Luminocanon
+M	431	Rock Climb	Treparrocas	Escalade
+M	432	Defog	Despejar	Anti-Brume
+M	433	Trick Room	Espacio Raro	Distorsion
+M	434	Draco Meteor	Cometa Draco	Draco-Météore
+M	435	Discharge	Chispazo	Coup d’Jus
+M	436	Lava Plume	Humareda	Ébullilave
+M	437	Leaf Storm	Lluevehojas	Tempête Verte
+M	438	Power Whip	Latigazo	Mégafouet
+M	439	Rock Wrecker	Romperrocas	Roc-Boulet
+M	440	Cross Poison	Veneno X	Poison Croix
+M	441	Gunk Shot	Lanzamugre	Détricanon
+M	442	Iron Head	Cabeza de Hierro	Tête de Fer
+M	443	Magnet Bomb	Bomba Imán	Bombe Aimant
+M	444	Stone Edge	Roca Afilada	Lame de Roc
+M	445	Captivate	Seducción	Séduction
+M	446	Stealth Rock	Trampa Rocas	Piège de Roc
+M	447	Grass Knot	Hierba Lazo	Nœud Herbe
+M	448	Chatter	Cháchara	Babil
+M	449	Judgment	Sentencia	Jugement
+M	450	Bug Bite	Picadura	Piqûre
+M	451	Charge Beam	Rayo Carga	Rayon Chargé
+M	452	Wood Hammer	Mazazo	Martobois
+M	453	Aqua Jet	Acua Jet	Aqua-Jet
+M	454	Attack Order	Al Ataque	Appel Attaque
+M	455	Defend Order	A Defender	Appel Défense
+M	456	Heal Order	Auxilio	Appel Soins
+M	457	Head Smash	Testarazo	Fracass’Tête
+M	458	Double Hit	Doble Golpe	Coup Double
+M	459	Roar of Time	Distorsión	Hurle-Temps
+M	460	Spacial Rend	Corte Vacío	Spatio-Rift
+M	461	Lunar Dance	Danza Lunar	Danse Lune
+M	462	Crush Grip	Agarrón	Presse
+M	463	Magma Storm	Lluvia Ígnea	Vortex Magma
+M	464	Dark Void	Brecha Negra	Trou Noir
+M	465	Seed Flare	Fulgor Semilla	Fulmigraine
+M	466	Ominous Wind	Viento Aciago	Vent Mauvais
+M	467	Shadow Force	Golpe Umbrío	Revenant
+M	468	Hone Claws	Afilagarras	Aiguisage
+M	469	Wide Guard	Vasta Guardia	Garde Large
+M	470	Guard Split	Isoguardia	Partage Garde
+M	471	Power Split	Isofuerza	Partage Force
+M	472	Wonder Room	Zona Extraña	Zone Étrange
+M	473	Psyshock	Psicocarga	Choc Psy
+M	474	Venoshock	Carga Tóxica	Choc Venin
+M	475	Autotomize	Aligerar	Allègement
+M	476	Rage Powder	Polvo Ira	Poudre Fureur
+M	477	Telekinesis	Telequinesis	Lévikinésie
+M	478	Magic Room	Zona Mágica	Zone Magique
+M	479	Smack Down	Antiaéreo	Anti-Air
+M	480	Storm Throw	Llave Corsé	Yama Arashi
+M	481	Flame Burst	Pirotecnia	Rebondifeu
+M	482	Sludge Wave	Onda Tóxica	Cradovague
+M	483	Quiver Dance	Danza Aleteo	Papillodanse
+M	484	Heavy Slam	Cuerpo Pesado	Tacle Lourd
+M	485	Synchronoise	Sincrorruido	Synchropeine
+M	486	Electro Ball	Bola Voltio	Boule Élek
+M	487	Soak	Empapar	Détrempage
+M	488	Flame Charge	Nitrocarga	Nitrocharge
+M	489	Coil	Enrosque	Enroulement
+M	490	Low Sweep	Puntapié	Balayette
+M	491	Acid Spray	Bomba Ácida	Bombe Acide
+M	492	Foul Play	Juego Sucio	Tricherie
+M	493	Simple Beam	Onda Simple	Rayon Simple
+M	494	Entrainment	Danza Amiga	Ten-Danse
+M	495	After You	Cede Paso	Après Vous
+M	496	Round	Canon	Chant Canon
+M	497	Echoed Voice	Eco Voz	Écho
+M	498	Chip Away	Guardia Baja	Attrition
+M	499	Clear Smog	Niebla Clara	Bain de Smog
+M	500	Stored Power	Poder Reserva	Force Ajoutée
+M	501	Quick Guard	Anticipo	Prévention
+M	502	Ally Switch	Cambio de Banda	Interversion
+M	503	Scald	Escaldar	Ébullition
+M	504	Shell Smash	Rompecoraza	Exuviation
+M	505	Heal Pulse	Pulso Cura	Vibra Soin
+M	506	Hex	Infortunio	Châtiment
+M	507	Sky Drop	Caída Libre	Chute Libre
+M	508	Shift Gear	Cambio de Marcha	Chgt Vitesse
+M	509	Circle Throw	Llave Giro	Projection
+M	510	Incinerate	Calcinación	Calcination
+M	511	Quash	Último Lugar	À la Queue
+M	512	Acrobatics	Acróbata	Acrobatie
+M	513	Reflect Type	Clonatipo	Copie-Type
+M	514	Retaliate	Represalia	Vengeance
+M	515	Final Gambit	Sacrificio	Tout ou Rien
+M	516	Bestow	Ofrenda	Passe-Cadeau
+M	517	Inferno	Infierno	Feu d’Enfer
+M	518	Water Pledge	Voto Agua	Aire d’Eau
+M	519	Fire Pledge	Voto Fuego	Aire de Feu
+M	520	Grass Pledge	Voto Planta	Aire d’Herbe
+M	521	Volt Switch	Voltiocambio	Change Éclair
+M	522	Struggle Bug	Estoicismo	Survinsecte
+M	523	Bulldoze	Terratemblor	Piétisol
+M	524	Frost Breath	Vaho Gélido	Souffle Glacé
+M	525	Dragon Tail	Cola Dragón	Draco-Queue
+M	526	Work Up	Avivar	Rengorgement
+M	527	Electroweb	Electrotela	Toile Élek
+M	528	Wild Charge	Voltio Cruel	Éclair Fou
+M	529	Drill Run	Taladradora	Tunnelier
+M	530	Dual Chop	Golpe Bis	Double Baffe
+M	531	Heart Stamp	Arrumaco	Crève-Cœur
+M	532	Horn Leech	Asta Drenaje	Encornebois
+M	533	Sacred Sword	Espada Santa	Lame Sainte
+M	534	Razor Shell	Concha Filo	Coqui-Lame
+M	535	Heat Crash	Golpe Calor	Tacle Feu
+M	536	Leaf Tornado	Ciclón de Hojas	Phytomixeur
+M	537	Steamroller	Rodillo de Púas	Bulldoboule
+M	538	Cotton Guard	Rizo Algodón	Cotogarde
+M	539	Night Daze	Pulso Noche	Explonuit
+M	540	Psystrike	Onda Mental	Frappe Psy
+M	541	Tail Slap	Plumerazo	Plumo-Queue
+M	542	Hurricane	Vendaval	Vent Violent
+M	543	Head Charge	Ariete	Peignée
+M	544	Gear Grind	Rueda Doble	Lancécrou
+M	545	Searing Shot	Bomba Ígnea	Incendie
+M	546	Techno Blast	Tecno Shock	Techno-Buster
+M	547	Relic Song	Canto Arcaico	Chant Antique
+M	548	Secret Sword	Sable Místico	Lame Ointe
+M	549	Glaciate	Mundo Gélido	Ère Glaciaire
+M	550	Bolt Strike	Ataque Fulgor	Charge Foudre
+M	551	Blue Flare	Llama Azul	Flamme Bleue
+M	552	Fiery Dance	Danza Llama	Danse du Feu
+M	553	Freeze Shock	Rayo Gélido	Éclair Gelé
+M	554	Ice Burn	Llama Gélida	Feu Glacé
+M	555	Snarl	Alarido	Aboiement
+M	556	Icicle Crash	Chuzos	Chute Glace
+M	557	V-create	V de Fuego	Coup Victoire
+M	558	Fusion Flare	Llama Fusión	Flamme Croix
+M	559	Fusion Bolt	Rayo Fusión	Éclair Croix
+M	560	Flying Press	Plancha Voladora	Flying Press
+M	561	Mat Block	Escudo Tatami	Tatamigaeshi
+M	562	Belch	Eructo	Éructation
+M	563	Rototiller	Fertilizante	Fertilisation
+M	564	Sticky Web	Red Viscosa	Toile Gluante
+M	565	Fell Stinger	Aguijón Letal	Dard Mortel
+M	566	Phantom Force	Golpe Fantasma	Hantise
+M	567	Trick-or-Treat	Halloween	Halloween
+M	568	Noble Roar	Rugido de Guerra	Râle Mâle
+M	569	Ion Deluge	Cortina Plasma	Déluge Plasmique
+M	570	Parabolic Charge	Carga Parábola	Parabocharge
+M	571	Forest’s Curse	Condena Silvana	Maléfice Sylvain
+M	572	Petal Blizzard	Tormenta Floral	Tempête Florale
+M	573	Freeze-Dry	Liofilización	Lyophilisation
+M	574	Disarming Voice	Voz Cautivadora	Voix Enjôleuse
+M	575	Parting Shot	Última Palabra	Dernier Mot
+M	576	Topsy-Turvy	Reversión	Renversement
+M	577	Draining Kiss	Beso Drenaje	Vampibaiser
+M	578	Crafty Shield	Truco Defensa	Vigilance
+M	579	Flower Shield	Defensa Floral	Garde Florale
+M	580	Grassy Terrain	Campo de Hierba	Champ Herbu
+M	581	Misty Terrain	Campo de Niebla	Champ Brumeux
+M	582	Electrify	Electrificación	Électrisation
+M	583	Play Rough	Carantoña	Câlinerie
+M	584	Fairy Wind	Viento Feérico	Vent Féérique
+M	585	Moonblast	Fuerza Lunar	Pouvoir Lunaire
+M	586	Boomburst	Estruendo	Bang Sonique
+M	587	Fairy Lock	Cerrojo Feérico	Verrou Enchanté
+M	588	King’s Shield	Escudo Real	Bouclier Royal
+M	589	Play Nice	Camaradería	Camaraderie
+M	590	Confide	Confidencia	Confidence
+M	591	Diamond Storm	Tormenta de Diamantes	Orage Adamantin
+M	592	Steam Eruption	Chorro de Vapor	Jet de Vapeur
+M	593	Hyperspace Hole	Paso Dimensional	TrouDimensionnel
+M	594	Water Shuriken	Shuriken de Agua	Sheauriken
+M	595	Mystical Fire	Llama Embrujada	Feu Ensorcelé
+M	596	Spiky Shield	Barrera Espinosa	Pico-Défense
+M	597	Aromatic Mist	Niebla Aromática	Brume Capiteuse
+M	598	Eerie Impulse	Onda Anómala	Ondes Étranges
+M	599	Venom Drench	Trampa Venenosa	Piège de Venin
+M	600	Powder	Polvo Explosivo	Nuée de Poudre
+M	601	Geomancy	Geocontrol	Géo-Contrôle
+M	602	Magnetic Flux	Aura Magnética	Magné-Contrôle
+M	603	Happy Hour	Paga Extra	Étrennes
+M	604	Electric Terrain	Campo Eléctrico	Champ Électrifié
+M	605	Dazzling Gleam	Brillo Mágico	Éclat Magique
+M	606	Celebrate	Celebración	Célébration
+M	607	Hold Hands	Manos Juntas	Mains Jointes
+M	608	Baby-Doll Eyes	Ojitos Tiernos	Regard Touchant
+M	609	Nuzzle	Moflete Estático	Frotte-Frimousse
+M	610	Hold Back	Clemencia	Retenue
+M	611	Infestation	Acoso	Harcèlement
+M	612	Power-Up Punch	Puño Incremento	Poing Boost
+M	613	Oblivion Wing	Ala Mortífera	Mort’Ailes
+M	614	Thousand Arrows	Mil Flechas	Myria-Flèches
+M	615	Thousand Waves	Mil Temblores	Myria-Vagues
+M	616	Land’s Wrath	Fuerza Telúrica	Force Chtonienne
+M	617	Light of Ruin	Luz Aniquiladora	Lumière du Néant
+M	618	Origin Pulse	Pulso Primigenio	Onde Originelle
+M	619	Precipice Blades	Filo del Abismo	Lame Pangéenne
+M	620	Dragon Ascent	Ascenso Draco	Draco-Ascension
+M	621	Hyperspace Fury	Cerco Dimensión	Furie Dimension

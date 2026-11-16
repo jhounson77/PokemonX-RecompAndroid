@@ -38,6 +38,9 @@ public:
     void PrepareReschedule() override { reschedule = true; }
     bool HasSingleInstructionBreakAccuracy() override { return false; }
     const auto& Statistics() const { return engine.Counted(); }
+    auto RetiredStatistics() const { return engine.RetiredStatistics(); }
+    const auto& FallbackStatistics() const { return engine.FallbackStatistics(); }
+    const auto& DecodeStatistics() const { return engine.DecodeStatistics(); }
 
 protected:
     std::shared_ptr<Memory::PageTable> GetPageTable() const override;

@@ -2,6 +2,7 @@
 // Licensed under GPLv3 or any later version
 // Refer to the LICENSE.txt file included.
 
+#include "common/px_host_timings.h"
 #include <boost/container/static_vector.hpp>
 
 #include "common/alignment.h"
@@ -275,7 +276,12 @@ bool GraphicsPipeline::Build(bool fail_on_compile_required) {
             continue;
         }
 
-        shader->WaitDone();
+        {
+#if defined(PX_PROFILE_HOST_TIMINGS)
+            PokemonXTiming::StageScope stage(PokemonXTiming::Stage::ShaderWait);
+#endif
+            shader->WaitDone();
+        }
         shader_stages[shader_count++] = vk::PipelineShaderStageCreateInfo{
             .stage = MakeShaderStage(i),
             .module = shader->Handle(),
@@ -303,7 +309,12 @@ bool GraphicsPipeline::Build(bool fail_on_compile_required) {
         pipeline_info.flags |= vk::PipelineCreateFlagBits::eFailOnPipelineCompileRequiredEXT;
     }
 
-    auto result = instance.GetDevice().createGraphicsPipelineUnique(pipeline_cache, pipeline_info);
+    auto result = [&] {
+#if defined(PX_PROFILE_HOST_TIMINGS)
+        PokemonXTiming::StageScope stage(fail_on_compile_required ? PokemonXTiming::Stage::PipelineCacheProbe : PokemonXTiming::Stage::PipelineCreate);
+#endif
+        return instance.GetDevice().createGraphicsPipelineUnique(pipeline_cache, pipeline_info);
+    }();
     if (result.result == vk::Result::eSuccess) {
         pipeline = std::move(result.value);
     } else if (result.result == vk::Result::eErrorPipelineCompileRequiredEXT) {

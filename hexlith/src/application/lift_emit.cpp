@@ -425,7 +425,8 @@ core::Result<LiftedModule> LiftModule(const ModuleSource& source,
     // The module is read as if it were mapped at zero: an address is an offset
     // into the file.
     const lift::CodeImage image{.bytes = source.file, .base = 0};
-    const lift::FlowContext flow{.entries = &entries, .regions = tables.Value().regions};
+    const lift::FlowContext flow{.entries = &entries, .regions = tables.Value().regions,
+                                 .resume_points = source.resume_points};
     std::set<std::pair<std::uint32_t, domain::arm::InstructionSet>> callable;
     for (const auto& function : functions) callable.emplace(function.address, function.instruction_set);
     lift::EmitContext context;
@@ -481,10 +482,15 @@ core::Result<LiftEmitReport> EmitLiftedCode(const LiftEmitRequest& request, port
     std::vector<analysis::FunctionRange>& functions = tables.Value().functions;
     std::ranges::sort(
         functions, {}, [](const analysis::FunctionRange& function) { return function.address; });
-    const std::unordered_set<std::uint32_t>& entries = tables.Value().entries;
+    core::Result<LiftTables> boundaries = request.known_functions.empty()
+        ? ReadLiftTables(request.functions, request.regions)
+        : ReadLiftTables(request.known_functions, request.regions);
+    if (!boundaries) return boundaries.Failure();
+    const std::unordered_set<std::uint32_t>& entries = boundaries.Value().entries;
 
     const lift::CodeImage image{.bytes = request.code, .base = request.base};
-    const lift::FlowContext flow{.entries = &entries, .regions = tables.Value().regions};
+    const lift::FlowContext flow{.entries = &entries, .regions = tables.Value().regions,
+                                 .resume_points = request.resume_points};
     std::set<std::pair<std::uint32_t, domain::arm::InstructionSet>> callable;
     for (const auto& function : functions) callable.emplace(function.address, function.instruction_set);
     lift::EmitContext context;

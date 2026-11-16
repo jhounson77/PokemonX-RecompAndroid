@@ -2,12 +2,16 @@
 #define HEXLITH_DOMAIN_LIFT_ENGINE_H
 
 #include "domain/arm/cpu_state.h"
+#include "domain/lift/decoded_instruction_cache.h"
+#include "domain/lift/fallback_profile.h"
 #include "domain/arm/interpreter/interpreter.h"
 #include "domain/memory/process_memory.h"
 
 #include <cstdint>
 
 namespace hexlith::domain::lift {
+
+namespace profile { class Run; }
 
 namespace runtime {
 class EntryTable;
@@ -54,10 +58,33 @@ public:
         return statistics_;
     }
 
+    // Instruction counts, unlike Counted().entries which counts calls. AOT
+    // management includes semantic handlers invoked inside generated code.
+    struct RetirementStatistics {
+        std::uint64_t total = 0;
+        std::uint64_t engine_fallback = 0;
+    };
+    RetirementStatistics RetiredStatistics() const {
+        return {retired_, statistics_.interpreted - nonretired_fallback_};
+    }
+
+    const auto& FallbackStatistics() const { return fallback_profile_; }
+
+    const auto& DecodeStatistics() const { return decode_cache_.Counted(); }
+
 private:
+    template<bool Sampled>
+    arm::Stop RunCore(arm::CpuState& state, memory::ProcessMemory& memory,
+                      std::uint64_t limit, std::uint64_t& executed,
+                      profile::Run* sample) const;
     const runtime::EntryTable* entries_;
     const runtime::LoadedModules* modules_;
     mutable Statistics statistics_;
+    mutable std::uint32_t execution_sample_state_ = 0xa341316c;
+    mutable std::uint64_t retired_ = 0;
+    mutable std::uint64_t nonretired_fallback_ = 0;
+    mutable DecodedInstructionCache decode_cache_;
+    mutable FallbackProfile fallback_profile_;
 };
 
 }  // namespace hexlith::domain::lift

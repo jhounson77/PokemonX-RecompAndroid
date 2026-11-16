@@ -14,7 +14,9 @@ struct ModuleImage {
 class Program {
 public:
     static std::shared_ptr<Program> Load(const std::string& main, const std::string& modules,
-                                         const std::string& verified_digest);
+                                         const std::string& verified_digest,
+                                         const std::string& supplemental_modules = {},
+                                         const std::string& supplemental_main = {});
     static std::shared_ptr<Program> FromEntries(hexlith::domain::lift::runtime::EntryTable entries);
     const auto& Entries() const { return main_ ? main_->Entries() : embedded_; }
     auto& Modules() { return loaded_; }
@@ -28,7 +30,9 @@ private:
     std::string expected_digest_;
     hexlith::domain::lift::runtime::EntryTable embedded_;
     std::unique_ptr<hexlith::adapters::lifted::LiftedLibrary> main_;
+    std::unique_ptr<hexlith::adapters::lifted::LiftedLibrary> main_resume_;
     std::unique_ptr<hexlith::adapters::lifted::ModulesLibrary> modules_;
+    std::unique_ptr<hexlith::adapters::lifted::ModulesLibrary> supplemental_;
     hexlith::domain::lift::runtime::LoadedModules loaded_;
 };
 // One running title per process, set before Core::System::Load and cleared

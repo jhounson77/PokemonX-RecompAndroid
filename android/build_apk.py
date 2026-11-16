@@ -57,6 +57,7 @@ def main():
         '-I', platform, BUILD / 'res/resources.zip')
     native = BUILD / 'stage/lib/arm64-v8a'
     if reuse:
+        for stale in native.glob('*.so'): stale.unlink()
         with zipfile.ZipFile(reuse) as previous:
             for name in previous.namelist():
                 if name.startswith('lib/arm64-v8a/') and name.endswith('.so'):
@@ -77,10 +78,20 @@ def main():
         shutil.copy2(env('PX_HOST_LIBRARY'), native / 'libpxhost.so')
         if not os.environ.get('PX_HOST_ALREADY_STRIPPED'):
             run(env('PX_NDK') / 'toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip', '--strip-unneeded', native / 'libpxhost.so')
+    if os.environ.get('PX_MAIN_RESUME_LIBRARY'):
+        shutil.copy2(env('PX_MAIN_RESUME_LIBRARY'), native / 'libpxresume15.so')
+        run(env('PX_NDK') / 'toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip', '--strip-unneeded', native / 'libpxresume15.so')
     if os.environ.get('PX_UPDATE_MAIN_LIBRARY'):
         for variable, filename in [('PX_UPDATE_MAIN_LIBRARY','libpxmain15.so'),('PX_UPDATE_MODULES_LIBRARY','libpxmodules15.so')]:
             shutil.copy2(env(variable), native / filename)
             run(env('PX_NDK') / 'toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip', '--strip-unneeded', native / filename)
+    if os.environ.get('PX_SUPPLEMENT_MODULES_LIBRARY'):
+        shutil.copy2(env('PX_SUPPLEMENT_MODULES_LIBRARY'), native / 'libpxintro15.so')
+        run(env('PX_NDK') / 'toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip', '--strip-unneeded', native / 'libpxintro15.so')
+    if (native / 'libpxmain15.so').exists() and not (native / 'libpxintro15.so').exists():
+        raise ValueError('Set PX_SUPPLEMENT_MODULES_LIBRARY or reuse an APK containing libpxintro15.so')
+    if (native / 'libpxmain15.so').exists() and not (native / 'libpxresume15.so').exists():
+        raise ValueError('Set PX_MAIN_RESUME_LIBRARY or reuse an APK containing libpxresume15.so')
     assets = BUILD / 'stage/assets' 
     modules = native / 'libpxmodules.so'
     if modules.exists() and 'libpxhost.so' not in needed_libraries(modules):
@@ -114,7 +125,7 @@ def main():
                 archive.write(path, str(path.relative_to(BUILD / 'stage')))
     aligned = BUILD / 'aligned.apk'
     run(tools / 'zipalign', '-P', '16', '-f', '4', unsigned, aligned)
-    result = BUILD / 'PokemonX_Recomp_v0.1.1_Beta.apk'
+    result = BUILD / 'PokemonX_Recomp_v0.1.2_Teste_17.apk'
     run(tools / 'apksigner', 'sign', '--ks', env('PX_KEYSTORE'), '--ks-pass',
         'file:' + str(env('PX_KEYSTORE_PASSWORD_FILE')), '--v1-signing-enabled', 'false',
         '--v2-signing-enabled', 'true', '--v3-signing-enabled', 'true',

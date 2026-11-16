@@ -4,6 +4,7 @@
 
 #pragma once
 #include <chrono>
+#include "common/px_frame_generation.h"
 #include "common/px_screen_interface.h"
 
 #include "common/common_types.h"
@@ -70,7 +71,7 @@ static_assert(sizeof(PresentUniformData) == 128,
               "PresentUniformData does not structure in shader!");
 
 class RendererVulkan : public VideoCore::RendererBase {
-    static constexpr std::size_t PRESENT_PIPELINES = 3;
+    static constexpr std::size_t PRESENT_PIPELINES = 5;
 
 public:
     explicit RendererVulkan(Core::System& system, Pica::PicaCore& pica, Frontend::EmuWindow& window,
@@ -102,6 +103,16 @@ private:
     void RenderToWindow(PresentWindow& window, const Layout::FramebufferLayout& layout,
                         bool flipped);
 
+    bool PresentWithFrameGeneration(PresentWindow& window, const Layout::FramebufferLayout& layout, bool flipped);
+    void DestroyFrameHistory();
+    void CopyFrameHistory(Frame* frame);
+    void DrawFramePass(Frame* target, unsigned pipeline, std::array<vk::ImageView,3> images, int mode);
+    PokemonXFrames::Policy frame_policy;
+    std::array<Frame,2> frame_history{};
+    Frame flow_frame{};
+    std::array<bool,2> history_initialized{};
+    unsigned history_count=0,history_latest=0;
+    bool flow_initialized=false,frame_generation_failed=false;
     void DrawScreens(Frame* frame, const Layout::FramebufferLayout& layout, bool flipped);
     void DrawBottomScreen(const Layout::FramebufferLayout& layout,
                           const Common::Rectangle<u32>& bottom_screen);

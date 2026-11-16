@@ -129,6 +129,15 @@ void ApplyArithmetic(const ir::Op& op, Temporaries& t) {
     case OpKind::Xor:
         t.Set(op.destination, a ^ b);
         break;
+    case OpKind::CountLeadingZeros:
+        t.Set(op.destination, primitives::CountLeadingZeros(a));
+        break;
+    case OpKind::ReverseBytes:
+        t.Set(op.destination, primitives::ReverseBytes(a));
+        break;
+    case OpKind::ReverseBytesInHalves:
+        t.Set(op.destination, primitives::ReverseBytesInHalves(a));
+        break;
     case OpKind::Multiply:
         t.Set(op.destination, a * b);
         break;

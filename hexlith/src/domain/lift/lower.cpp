@@ -72,7 +72,22 @@ bool IsHandledByTheInterpreter(arm::Operation operation) {
     case Operation::SmlalHalf:
     case Operation::SmulwHalf:
     case Operation::SmlawHalf:
-    case Operation::CountLeadingZeros:
+    case Operation::Usat:
+    case Operation::Pkhbt:
+    case Operation::Smlad:
+    case Operation::Uxtb16:
+    case Operation::Usat16:
+    case Operation::Pkhtb:
+    case Operation::Qadd:
+    case Operation::QdoubleAdd:
+    case Operation::Ssat16:
+    case Operation::Qsub:
+    case Operation::Smusd:
+    case Operation::Smuad:
+    case Operation::Uxtab16:
+    case Operation::Ssat:
+    case Operation::ParallelArithmetic:
+    case Operation::Sel:
         return true;
     default:
         return false;
@@ -139,6 +154,18 @@ private:
         case Operation::Bic:
         case Operation::Mvn:
             DataProcessing();
+            return true;
+        case Operation::CountLeadingZeros:
+            Write(instruction_.destination, Produce(OpKind::CountLeadingZeros, Type::Word,
+                                                   {.a = Read(instruction_.second)}));
+            return true;
+        case Operation::Rev:
+            Write(instruction_.destination, Produce(OpKind::ReverseBytes, Type::Word,
+                                                   {.a = Read(instruction_.second)}));
+            return true;
+        case Operation::Rev16:
+            Write(instruction_.destination, Produce(OpKind::ReverseBytesInHalves, Type::Word,
+                                                   {.a = Read(instruction_.second)}));
             return true;
         case Operation::Mul:
         case Operation::Mla:

@@ -206,8 +206,11 @@ template<memory::GuestMemory Memory>
     return interpreter::Dispatch(execution);
 }
 
-template<memory::GuestMemory Memory>
-Stop StepDecoded(CpuState& state, Memory& memory, const Instruction& instruction) {
+// Cached operand legality is a property of the decoded instruction alone.
+// Conditions and all value-dependent checks remain live in either path.
+template<bool CachedOperands, memory::GuestMemory Memory>
+Stop StepDecodedImpl(CpuState& state, Memory& memory, const Instruction& instruction,
+                     bool cached_unpredictable) {
     using namespace interpreter;
 
     const std::uint32_t address = state.registers.at(ProgramCounter);
@@ -227,7 +230,11 @@ Stop StepDecoded(CpuState& state, Memory& memory, const Instruction& instruction
     // The register combinations the architecture calls unpredictable stop the
     // interpreter before anything is written. The rule is shared with the
     // lifter, which has to stop on the same ones.
-    if (primitives::HasUnpredictableOperands(instruction)) {
+    const bool unpredictable = [&] {
+        if constexpr (CachedOperands) return cached_unpredictable;
+        return primitives::HasUnpredictableOperands(instruction);
+    }();
+    if (unpredictable) {
         return Halt(execution, StopReason::Unpredictable);
     }
 
@@ -239,6 +246,11 @@ Stop StepDecoded(CpuState& state, Memory& memory, const Instruction& instruction
         state.registers.at(ProgramCounter) = execution.Next();
     }
     return Completed();
+}
+
+template<memory::GuestMemory Memory>
+Stop StepDecoded(CpuState& state, Memory& memory, const Instruction& instruction) {
+    return StepDecodedImpl<false>(state, memory, instruction, false);
 }
 
 template<memory::GuestMemory Memory>

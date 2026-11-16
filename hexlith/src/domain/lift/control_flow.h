@@ -160,6 +160,10 @@ struct FlowContext {
     // module is loaded. True only where the bytes are known not to change, as in
     // the tests.
     bool literals_are_constant = false;
+
+    // Optional continuation addresses already observed executing. Only exact
+    // instruction starts reached by this function are split into new blocks.
+    std::span<const std::uint32_t> resume_points{};
 };
 
 // The largest function the builder will follow. A function this long is a sign

@@ -42,6 +42,10 @@ struct LiftEmitRequest {
     std::string_view regions;
 
     std::size_t instructions_per_shard = DefaultInstructionsPerShard;
+    std::span<const std::uint32_t> resume_points{};
+    // Optional complete function table for boundaries in a subset build.
+    // Calls to functions outside the emitted subset go through runtime dispatch.
+    std::string_view known_functions{};
 };
 
 struct LiftEmitReport {
@@ -69,6 +73,7 @@ struct ModuleSource {
     core::ByteSpan file;
     std::string_view functions;
     std::string_view regions;
+    std::span<const std::uint32_t> resume_points{};
 };
 
 struct LiftModulesRequest {
